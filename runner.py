@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import platform
 import hashlib
+import signal
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +16,24 @@ from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 
 console = Console()
+
+
+def terminate_process_tree(pid):
+    """Terminate process tree for a given PID across platforms."""
+    if pid is None:
+        return
+
+    try:
+        if platform.system() == "Windows":
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+            )
+        else:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+    except Exception as e:
+        console.print(f"[yellow]! Failed to terminate process tree for PID {pid}: {e}[/yellow]")
 
 
 def print_header():
@@ -38,11 +58,16 @@ def compute_file_hash(filepath):
         return None
 
 
-def get_env_file_hashes():
+def get_env_file_hashes(has_gpu=False):
     """Get current hashes of all environment YAML files."""
+    muscle_env_name = "msk_musclemap_gpu" if has_gpu else "msk_musclemap_cpu"
+    muscle_env_yaml = (
+        "config/env_musclemap_gpu.yaml" if has_gpu else "config/env_musclemap_cpu.yaml"
+    )
+
     envs = {
         "msk_base": "config/env_base.yaml",
-        "msk_musclemap": "config/env_musclemap.yaml",
+        muscle_env_name: muscle_env_yaml,
         "msk_totalseg_cpu": "config/env_totalseg_cpu.yaml",
         "msk_totalseg_gpu": "config/env_totalseg_gpu.yaml",
     }
@@ -55,22 +80,29 @@ def get_env_file_hashes():
     return hashes
 
 
-def update_conda_envs(user_settings):
+def update_conda_envs(user_settings, has_gpu=False):
     """Create or update Micromamba environments with change detection."""
     console.print(
         "\n[yellow]Checking and updating necessary Micromamba environments...[/yellow]"
     )
-    
+
+    muscle_env_name = "msk_musclemap_gpu" if has_gpu else "msk_musclemap_cpu"
+    muscle_env_yaml = (
+        "config/env_musclemap_gpu.yaml" if has_gpu else "config/env_musclemap_cpu.yaml"
+    )
+
     envs = {
         "msk_base": "config/env_base.yaml",
-        "msk_musclemap": "config/env_musclemap.yaml",
+        muscle_env_name: muscle_env_yaml,
         "msk_totalseg_cpu": "config/env_totalseg_cpu.yaml",
         "msk_totalseg_gpu": "config/env_totalseg_gpu.yaml",
     }
 
     # Load previous hashes from user_settings
     previous_hashes = user_settings.get("env_file_hashes", {})
-    current_hashes = get_env_file_hashes()
+    current_hashes = get_env_file_hashes(has_gpu=has_gpu)
+
+    all_ok = True
 
     for env_name, yaml_path in envs.items():
         env_path = Path(f"./envs/{env_name}").resolve()
@@ -80,6 +112,7 @@ def update_conda_envs(user_settings):
 
         if not Path(yaml_path).exists():
             console.print(f"[red]Missing environment recipe: {yaml_path}[/red]")
+            all_ok = False
             continue
 
         prev_hash = previous_hashes.get(env_name)
@@ -107,6 +140,7 @@ def update_conda_envs(user_settings):
                     f"[red]✗ Error while creating '{env_name}' (return code: {result.returncode}):[/red]"
                 )
                 console.print(f"[red]{result.stderr}[/red]")
+                all_ok = False
 
         elif prev_hash and curr_hash and prev_hash != curr_hash:
             # Environment exists but YAML changed - update it
@@ -127,6 +161,7 @@ def update_conda_envs(user_settings):
                     f"[red]✗ Error while updating '{env_name}' (return code: {result.returncode}):[/red]"
                 )
                 console.print(f"[red]{result.stderr}[/red]")
+                all_ok = False
 
         else:
             # Environment exists and YAML unchanged
@@ -136,7 +171,7 @@ def update_conda_envs(user_settings):
 
     # Save current hashes for future comparison
     user_settings["env_file_hashes"] = current_hashes
-    return user_settings
+    return all_ok, user_settings
 
 
 def check_gpu():
@@ -206,7 +241,7 @@ def install_micromamba():
 
 
 
-def check_micromamba(user_settings):
+def check_micromamba(user_settings, has_gpu=False):
     console.print("\n[yellow]Checking for Micromamba...[/yellow]")
     mamba_path = shutil.which("micromamba")
 
@@ -237,7 +272,11 @@ def check_micromamba(user_settings):
             else:
                 return False, user_settings
 
-    user_settings = update_conda_envs(user_settings)
+    env_ok, user_settings = update_conda_envs(user_settings, has_gpu=has_gpu)
+    if not env_ok:
+        console.print("[red]✗ One or more environment checks/updates failed.[/red]")
+        return False, user_settings
+
     return True, user_settings
 
 
@@ -287,10 +326,8 @@ def check_matlab(mw_path):
         if "TOOLBOXES_OK" in result.stdout:
             console.print("[green]✓ Required MATLAB Toolboxes found.[/green]")
         else:
-            console.print(
-                "[yellow]! Required MATLAB Toolboxes (Curve Fitting, Statistics and ML) might be missing.[/yellow]"
-            )
-            console.print("Please verify your MATLAB installation manually.")
+            console.print("[red]✗ Required MATLAB Toolboxes are missing.[/red]")
+            return False
 
         os_result = subprocess.run(os_args, capture_output=True, text=True)
         is_opensim_ready = False
@@ -314,10 +351,13 @@ def check_matlab(mw_path):
             console.print(
                 "[yellow]! OpenSim API is not yet configured in MATLAB. Running setup script...[/yellow]"
             )
-            setup_opensim_matlab(mw_path)
+            if not setup_opensim_matlab(mw_path):
+                return False
 
     except Exception as e:
-        console.print(f"[yellow]! Failed to execute MATLAB checks: {e}[/yellow]")
+        console.print(f"[red]✗ Failed to execute MATLAB checks: {e}[/red]")
+        return False
+
     return True
 
 
@@ -428,6 +468,210 @@ def setup_opensim_matlab(mw_build_path):
         return False
 
 
+def check_and_setup_musclemap(musclemap_env_name):
+    """Check for MuscleMap repository and ensure it is installed in selected msk_musclemap_* env."""
+    console.print("\n[yellow]Checking MuscleMap repository...[/yellow]")
+
+    musclemap_path = Path("src/MuscleMap")
+
+    def install_musclemap_in_env(repo_path: Path) -> bool:
+        env_path = Path(f"envs/{musclemap_env_name}").resolve()
+        python_exe = env_path / (
+            "python.exe" if platform.system() == "Windows" else "bin/python"
+        )
+        is_gpu_env = musclemap_env_name.endswith("_gpu")
+
+        if not python_exe.exists():
+            console.print(
+                f"[red]✗ Python executable not found for {musclemap_env_name} at {python_exe}[/red]"
+            )
+            return False
+
+        console.print(
+            f"[cyan]Installing MuscleMap into {musclemap_env_name} environment...[/cyan]"
+        )
+
+        if is_gpu_env:
+            req_file = repo_path / "requirements.txt"
+            if not req_file.exists():
+                console.print(
+                    f"[red]✗ requirements.txt not found at {req_file}[/red]"
+                )
+                return False
+
+            console.print(
+                "[cyan]GPU env detected: installing MuscleMap deps without torch/torchvision to preserve pytorch-cuda.[/cyan]"
+            )
+
+            tmp_req_path = None
+            try:
+                filtered_lines = []
+                with open(req_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        raw = line.strip()
+                        if not raw or raw.startswith("#"):
+                            continue
+                        pkg = raw.split("==", 1)[0].split(">=", 1)[0].split("<=", 1)[0]
+                        pkg = pkg.strip().lower()
+                        if pkg in {"torch", "torchvision", "torchaudio"}:
+                            continue
+                        filtered_lines.append(raw)
+
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix="_musclemap_no_torch.txt", delete=False, encoding="utf-8"
+                ) as tf:
+                    tf.write("\n".join(filtered_lines) + "\n")
+                    tmp_req_path = tf.name
+
+                deps_result = subprocess.run(
+                    [
+                        "micromamba",
+                        "run",
+                        "-p",
+                        str(env_path),
+                        "python",
+                        "-m",
+                        "pip",
+                        "install",
+                        "-r",
+                        str(tmp_req_path),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=900,
+                )
+
+                if deps_result.returncode != 0:
+                    console.print("[red]✗ MuscleMap dependency install failed.[/red]")
+                    if deps_result.stderr:
+                        console.print(f"[white]{deps_result.stderr}[/white]")
+                    return False
+
+            finally:
+                if tmp_req_path and Path(tmp_req_path).exists():
+                    try:
+                        Path(tmp_req_path).unlink()
+                    except Exception:
+                        pass
+
+            install_cmd = [
+                "micromamba",
+                "run",
+                "-p",
+                str(env_path),
+                "python",
+                "-m",
+                "pip",
+                "install",
+                "-e",
+                str(repo_path.resolve()),
+                "--no-deps",
+            ]
+        else:
+            install_cmd = [
+                "micromamba",
+                "run",
+                "-p",
+                str(env_path),
+                "python",
+                "-m",
+                "pip",
+                "install",
+                "-e",
+                str(repo_path.resolve()),
+            ]
+
+        install_result = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+
+        if install_result.returncode != 0:
+            console.print("[red]✗ MuscleMap pip install failed.[/red]")
+            if install_result.stderr:
+                console.print(f"[white]{install_result.stderr}[/white]")
+            return False
+
+        verify_result = subprocess.run(
+            [
+                "micromamba",
+                "run",
+                "-p",
+                str(env_path),
+                "mm_segment",
+                "-h",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        if verify_result.returncode != 0:
+            console.print(
+                "[yellow]! MuscleMap installation finished, but mm_segment verification failed.[/yellow]"
+            )
+            if verify_result.stderr:
+                console.print(f"[white]{verify_result.stderr}[/white]")
+            return False
+
+        console.print("[green]✓ MuscleMap installed and mm_segment is available.[/green]")
+        return True
+
+    # Check if MuscleMap exists
+    if musclemap_path.exists() and musclemap_path.is_dir():
+        console.print(
+            "[green]✓ MuscleMap found in default location (src/MuscleMap).[/green]"
+        )
+        return install_musclemap_in_env(musclemap_path)
+
+    # If not, offer to auto-download
+    console.print(
+        "[yellow]! MuscleMap repository not found at src/MuscleMap.[/yellow]"
+    )
+    auto_download = Confirm.ask(
+        "Would you like to automatically clone MuscleMap from GitHub?", default=True
+    )
+
+    if not auto_download:
+        console.print(
+            "[yellow]MuscleMap is optional. Pipeline may work without it for muscle segmentation.[/yellow]"
+        )
+        return False
+
+    # Create src directory if needed
+    src_dir = Path("src")
+    src_dir.mkdir(exist_ok=True)
+
+    # Clone MuscleMap
+    try:
+        console.print("[cyan]Cloning MuscleMap repository...[/cyan]")
+        result = subprocess.run(
+            [
+                "git",
+                "clone",
+                "https://github.com/MuscleMap/MuscleMap.git",
+                str(musclemap_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if result.returncode == 0:
+            console.print("[green]✓ MuscleMap successfully cloned.[/green]")
+            return install_musclemap_in_env(musclemap_path)
+        else:
+            console.print(
+                f"[red]Failed to clone MuscleMap: {result.stderr}[/red]"
+            )
+            return False
+    except Exception as e:
+        console.print(f"[red]Error cloning MuscleMap: {e}[/red]")
+        return False
+
+
 def find_staple_and_opensim(user_settings):
     console.print("\n[yellow]Checking MSK-STAPLE location...[/yellow]")
 
@@ -437,6 +681,7 @@ def find_staple_and_opensim(user_settings):
             "[green]✓ MSK-STAPLE found in default location (src/STAPLE).[/green]"
         )
         user_settings["staple_path"] = str(staple_path.resolve())
+        return True
     else:
         staple_env = os.environ.get("STAPLE_PATH")
         if staple_env and Path(staple_env).exists():
@@ -444,12 +689,20 @@ def find_staple_and_opensim(user_settings):
                 f"[green]✓ MSK-STAPLE found from PATH at {staple_env}[/green]"
             )
             user_settings["staple_path"] = staple_env
+            return True
         else:
             path_input = Prompt.ask(
                 "[yellow]MSK-STAPLE not found. Please provide absolute path to STAPLE[/yellow]",
                 default=str(Path("src/STAPLE").resolve()),
             )
-            user_settings["staple_path"] = str(Path(path_input).resolve())
+            resolved = Path(path_input).resolve()
+            if resolved.exists() and resolved.is_dir():
+                user_settings["staple_path"] = str(resolved)
+                console.print(f"[green]✓ MSK-STAPLE found at {resolved}.[/green]")
+                return True
+
+            console.print(f"[red]✗ MSK-STAPLE path is invalid: {resolved}[/red]")
+            return False
 
 
 def compile_mask2stl(user_settings):
@@ -598,13 +851,8 @@ def check_muscle_wrapping(user_settings):
         console.print(f"[green]✓ Muscle Wrapping DLL found at {dll_path}.[/green]")
         return str(mw_build_dir.resolve())
     else:
-        console.print(
-            f"[yellow]! Muscle Wrapping DLL not found at {dll_path}.[/yellow]"
-        )
-        console.print(
-            "You may need to compile it using CMake similar to mask2stl before executing the pipeline."
-        )
-        return str(mw_build_dir.resolve())
+        console.print(f"[red]✗ Muscle Wrapping DLL not found at {dll_path}.[/red]")
+        return None
 
 
 def main():
@@ -648,47 +896,58 @@ def main():
                 f"[yellow]! Failed to load existing config.json: {e}[/yellow]"
             )
 
-    skip_preflight = user_settings.get("skip_preflight_checks", False)
-
-    if skip_preflight:
+    if user_settings.get("skip_preflight_checks", False):
         console.print(
-            "[yellow]Skipping pre-flight checks as requested in user_settings.yaml...[/yellow]"
-        )
-        # But still check and update environments if YAML files changed
-        user_settings = update_conda_envs(user_settings)
-        
-        mw_path = user_settings.get("muscle_wrapping_path")
-        if mw_path:
-            bin_dir = Path(mw_path) / "ExternalLibs" / "OpenSim" / "Bin" / "bin"
-            if bin_dir.exists():
-                os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
-    else:
-        has_gpu = check_gpu()
-        config["snakemake_env"] = config.get("snakemake_env", {})
-        config["snakemake_env"]["totalseg"] = (
-            "env_totalseg_gpu.yaml" if has_gpu else "env_totalseg_cpu.yaml"
+            "[yellow]! 'skip_preflight_checks' is ignored: all pre-flight checks are mandatory.[/yellow]"
         )
 
-        success, user_settings = check_micromamba(user_settings)
-        if not success:
-            sys.exit(1)
+    has_gpu = check_gpu()
+    user_settings["has_gpu"] = has_gpu
+    config["snakemake_env"] = config.get("snakemake_env", {})
+    config["snakemake_env"]["totalseg"] = (
+        "env_totalseg_gpu.yaml" if has_gpu else "env_totalseg_cpu.yaml"
+    )
+    config["snakemake_env"]["musclemap"] = (
+        "env_musclemap_gpu.yaml" if has_gpu else "env_musclemap_cpu.yaml"
+    )
 
-        mw_path = check_muscle_wrapping(user_settings)
-        if mw_path:
-            user_settings["muscle_wrapping_path"] = mw_path
-            # Oprava PATH
-            bin_dir = Path(mw_path) / "ExternalLibs" / "OpenSim" / "Bin" / "bin"
-            if bin_dir.exists():
-                os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
+    success, user_settings = check_micromamba(user_settings, has_gpu=has_gpu)
+    if not success:
+        console.print("[bold red]❌ Pre-flight failed: Micromamba/environment setup failed.[/bold red]")
+        sys.exit(1)
 
-        check_matlab(mw_path)
-        find_staple_and_opensim(user_settings)
+    mw_path = check_muscle_wrapping(user_settings)
+    if not mw_path:
+        console.print("[bold red]❌ Pre-flight failed: Muscle Wrapping is not available.[/bold red]")
+        sys.exit(1)
 
-        if not compile_mask2stl(user_settings):
-            console.print(
-                "[bold red]❌ Pre-flight failed: mask2stl is not available. Pipeline will not start.[/bold red]"
-            )
-            sys.exit(1)
+    user_settings["muscle_wrapping_path"] = mw_path
+    bin_dir = Path(mw_path) / "ExternalLibs" / "OpenSim" / "Bin" / "bin"
+    if bin_dir.exists():
+        os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
+
+    if not check_matlab(mw_path):
+        console.print("[bold red]❌ Pre-flight failed: MATLAB/OpenSim check failed.[/bold red]")
+        sys.exit(1)
+
+    if not find_staple_and_opensim(user_settings):
+        console.print("[bold red]❌ Pre-flight failed: MSK-STAPLE path check failed.[/bold red]")
+        sys.exit(1)
+
+    musclemap_env_name = (
+        config["snakemake_env"]["musclemap"]
+        .replace("env_", "msk_")
+        .replace(".yaml", "")
+    )
+    if not check_and_setup_musclemap(musclemap_env_name):
+        console.print("[bold red]❌ Pre-flight failed: MuscleMap setup/check failed.[/bold red]")
+        sys.exit(1)
+
+    if not compile_mask2stl(user_settings):
+        console.print(
+            "[bold red]❌ Pre-flight failed: mask2stl is not available. Pipeline will not start.[/bold red]"
+        )
+        sys.exit(1)
 
     input_format = user_settings.get("input_format")
     if not input_format:
@@ -777,8 +1036,19 @@ def main():
             str(cores_setting),
         ]
 
+        pipeline_proc = None
         try:
-            subprocess.run(cmd, env=current_env, check=True)
+            popen_kwargs = {}
+            if platform.system() == "Windows":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                popen_kwargs["preexec_fn"] = os.setsid
+
+            pipeline_proc = subprocess.Popen(cmd, env=current_env, **popen_kwargs)
+            pipeline_return = pipeline_proc.wait()
+            if pipeline_return != 0:
+                raise subprocess.CalledProcessError(pipeline_return, cmd)
+
             console.print(
                 "\n[bold green]✅ Pipeline execution completed successfully![/bold green]"
             )
@@ -808,6 +1078,12 @@ def main():
                 console.print(
                     f"[bold green]✓ Snakemake report generated: {report_path}[/bold green]"
                 )
+        except KeyboardInterrupt:
+            console.print("\n[bold yellow]⛔ Ctrl+C detected. Terminating entire pipeline process tree...[/bold yellow]")
+            if pipeline_proc is not None and pipeline_proc.poll() is None:
+                terminate_process_tree(pipeline_proc.pid)
+            console.print("[bold yellow]Pipeline was interrupted and all child processes were terminated.[/bold yellow]")
+            sys.exit(130)
         except subprocess.CalledProcessError as e:
             console.print(
                 f"\n[bold red]❌ Pipeline execution failed with return code {e.returncode}.[/bold red]"

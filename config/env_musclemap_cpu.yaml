@@ -1,7 +1,10 @@
-name: msk_musclemap
+name: msk_musclemap_cpu
 channels:
+  - pytorch
   - conda-forge
   - defaults
 dependencies:
   - python=3.11.8
+  - pytorch
+  - torchvision
   - pip

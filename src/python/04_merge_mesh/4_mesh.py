@@ -5,6 +5,49 @@ import pymeshlab
 import shutil
 import sys
 
+
+def merge_left_right_pairs(input_dir, output_dir, extensions=(".stl", ".obj")):
+    """Merge all *_l + *_r mesh pairs into a single mesh without side suffix.
+
+    Example:
+        iliacus_l.stl + iliacus_r.stl -> iliacus.stl
+    """
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    pair_map = {}
+    for p in input_dir.iterdir():
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in extensions:
+            continue
+
+        stem = p.stem
+        low = stem.lower()
+        if low.endswith("_l"):
+            key = (stem[:-2], p.suffix.lower())
+            pair_map.setdefault(key, {})["l"] = p
+        elif low.endswith("_r"):
+            key = (stem[:-2], p.suffix.lower())
+            pair_map.setdefault(key, {})["r"] = p
+
+    merged_count = 0
+    for (base, ext), sides in sorted(pair_map.items()):
+        left = sides.get("l")
+        right = sides.get("r")
+        if not left or not right:
+            continue
+
+        out_file = output_dir / f"{base}{ext}"
+        ok = merge_meshes([str(left), str(right)], str(out_file))
+        if ok:
+            merged_count += 1
+            print(f"Merged pair -> {out_file.name}")
+
+    print(f"Merged {merged_count} left/right pairs.")
+    return merged_count
+
 def merge_meshes(input_files, output_file):
     """Sloučí více STL souborů do jednoho.
 
@@ -172,6 +215,11 @@ def main():
     parser = argparse.ArgumentParser(description="Mesh post-processing for Snakemake pipeline.")
     parser.add_argument("--input", type=str, required=True, help="Input folder containing .stl files from mask2stl conversion")
     parser.add_argument("--output", type=str, required=True, help="Output folder for processed mesh files")
+    parser.add_argument(
+        "--merge-lr-pairs",
+        action="store_true",
+        help="Merge all *_l + *_r pairs to single meshes (e.g., iliacus_l + iliacus_r -> iliacus).",
+    )
     args = parser.parse_args()
 
     data_dir = Path(args.input).resolve()
@@ -182,6 +230,11 @@ def main():
         raise SystemExit(1)
 
     os.makedirs(result_dir, exist_ok=True)
+
+    if args.merge_lr_pairs:
+        merge_left_right_pairs(data_dir, result_dir)
+        print("\nMesh post-processing completed successfully.")
+        return 0
 
     # 1) Pelvis: hip_left + hip_right -> pelvis_no_sacrum.stl (optional)
     hip_left = data_dir / "hip_left.stl"

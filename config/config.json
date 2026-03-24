@@ -5,7 +5,8 @@
         "output_dir": "data/output"
     },
     "snakemake_env": {
-        "totalseg": "env_totalseg_gpu.yaml"
+        "totalseg": "env_totalseg_gpu.yaml",
+        "musclemap": "env_musclemap_gpu.yaml"
     },
     "totalsegmentator": {
         "fast": false,
@@ -26,6 +27,23 @@
         "decimate_fraction": 0.1
     },
     "muscle_map": {
-        "default_model": "default"
+        "default_model": "default",
+        "labels": {
+            "adductor_brevis_l": 7221,
+            "adductor_brevis_r": 7222,
+            "gluteus_medius_l": 6111,
+            "gluteus_medius_r": 6112,
+            "gluteus_maximus_l": 6121,
+            "gluteus_maximus_r": 6122,
+            "iliacus_l": 6141,
+            "iliacus_r": 6142
+        }
+    },
+    "muscle_preproc": {
+        "min_voxels": 100,
+        "opening_kernel": 3,
+        "closing_kernel": 3,
+        "fill_holes": true,
+        "keep_largest": true
     }
 }

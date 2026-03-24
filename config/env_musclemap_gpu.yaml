@@ -1,0 +1,12 @@
+name: msk_musclemap_gpu
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.8
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - pip

@@ -28,6 +28,7 @@ def get_py_exe(env_name):
 rule all:
     input:
         os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
+        os.path.join(TEMP_DIR, "muscle_models"),
 
 
 # KROK 0: Validace vstupních souborů
@@ -74,7 +75,85 @@ rule total_segmentator_raw:
         """
 
 
-# KROK 2b: Obecné čištění masek (funguje i pro masky mimo TotalSegmentator).
+rule muscle_map_raw:
+    input:
+        nii=os.path.join(TEMP_DIR, "ct.nii.gz"),
+    output:
+        seg_raw_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations_raw")),
+    params:
+        py_exe=lambda wildcards: get_py_exe(
+            config["snakemake_env"]["musclemap"]
+            .replace("env_", "msk_")
+            .replace(".yaml", "")
+        ),
+    shell:
+        """
+        "{params.py_exe}" src/python/02a_muscles_segm/2a_run_musclemap.py {input.nii} \
+            --output-dir {output.seg_raw_dir}
+        """
+
+
+# KROK 2b: Extrakce požadovaných svalů z MuscleMap multi-label segmentace
+rule extract_muscle_masks:
+    input:
+        seg_raw_dir=os.path.join(TEMP_DIR, "muscle_segmentations_raw"),
+    output:
+        seg_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations_extracted")),
+    params:
+        py_exe=lambda wildcards: get_py_exe(
+            config["snakemake_env"]["musclemap"]
+            .replace("env_", "msk_")
+            .replace(".yaml", "")
+        ),
+    shell:
+        """
+        "{params.py_exe}" src/python/02a_muscles_segm/2b_clean_muscle_masks.py \
+            {input.seg_raw_dir}/musclemap_segmentation.nii.gz \
+            --output-dir {output.seg_dir} \
+            --config config/config.json
+        """
+
+
+# KROK 2c: Čištění svalových masek pomocí sdíleného nástroje
+rule clean_muscle_masks:
+    input:
+        seg_raw_dir=os.path.join(TEMP_DIR, "muscle_segmentations_extracted"),
+    output:
+        seg_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations")),
+    params:
+        py_exe=lambda wildcards: get_py_exe(
+            config["snakemake_env"]["totalseg"]
+            .replace("env_", "msk_")
+            .replace(".yaml", "")
+        ),
+        min_v=config.get("muscle_preproc", {}).get("min_voxels", 100),
+        open_k=config.get("muscle_preproc", {}).get("opening_kernel", 3),
+        clos_k=config.get("muscle_preproc", {}).get("closing_kernel", 3),
+        holes=(
+            "--fill-holes"
+            if config.get("muscle_preproc", {}).get("fill_holes", True)
+            else "--no-fill-holes"
+        ),
+        keep_l=(
+            "--keep-largest"
+            if config.get("muscle_preproc", {}).get("keep_largest", True)
+            else "--no-keep-largest"
+        ),
+    shell:
+        """
+        "{params.py_exe}" src/python/02_mask_preproc/2_clean_masks.py \
+            --input-dir {input.seg_raw_dir} \
+            --output-dir {output.seg_dir} \
+            --iso 0.5 \
+            --min-voxels {params.min_v} \
+            --opening {params.open_k} \
+            --closing {params.clos_k} \
+            {params.holes} \
+            {params.keep_l}
+        """
+
+
+# KROK 2d: Obecné čištění masek
 rule clean_masks:
     input:
         seg_raw_dir=os.path.join(TEMP_DIR, "segmentations_raw"),
@@ -105,7 +184,7 @@ rule clean_masks:
         """
 
 
-# KROK 3a: Zavolání zkompilovaného C++ programu pro převod masek na 3D sítě
+# KROK 3a: Zavolání zkompilovaného C++ programu pro převod masek kostí na 3D sítě (STL)
 rule cpp_mask2stl:
     input:
         seg_dir=os.path.join(TEMP_DIR, "segmentations"),
@@ -124,6 +203,25 @@ rule cpp_mask2stl:
         """
 
 
+# KROK 3a-bis: Zavolání zkompilovaného C++ programu pro převod svalových masek na 3D sítě (OBJ)
+rule cpp_muscle_mask2obj:
+    input:
+        seg_dir=os.path.join(TEMP_DIR, "muscle_segmentations"),
+    output:
+        models_dir=directory(os.path.join(TEMP_DIR, "muscle_processed")),
+    params:
+        cpp_bin=(
+            "src/cpp/3_mask2stl/build/Release/mask2stl.exe"
+            if os.name == "nt"
+            else "src/cpp/3_mask2stl/build/mask2stl"
+        ),
+        smooth=config.get("mask_to_mesh", {}).get("smooth_iterations", 30),
+    shell:
+        """
+        "{params.cpp_bin}" --in {input.seg_dir} --out {output.models_dir} --smooth_iters {params.smooth} --format obj
+        """
+
+
 # KROK 3b: Sloučení a zpracování vygenerovaných meshe z C++ programu
 rule merge_meshes:
     input:
@@ -135,6 +233,18 @@ rule merge_meshes:
     shell:
         """
         "{params.py_exe}" src/python/04_merge_mesh/4_mesh.py --input {input.models_dir} --output {output.meshes_dir}
+        """
+
+rule merge_muscle_meshes:
+    input:
+        models_dir=os.path.join(TEMP_DIR, "muscle_processed"),
+    output:
+        meshes_dir=directory(os.path.join(TEMP_DIR, "muscle_models")),
+    params:
+        py_exe=get_py_exe("msk_base"),
+    shell:
+        """
+        "{params.py_exe}" src/python/04_merge_mesh/4_mesh.py --input {input.models_dir} --output {output.meshes_dir} --merge-lr-pairs
         """
 
 

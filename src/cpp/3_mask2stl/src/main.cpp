@@ -1,4 +1,4 @@
-// ts2stl-staple: Extract meshes (.stl) from TotalSegmentator masks for msk-STAPLE
+// ts2stl-staple: Extract meshes (.stl, .obj) from TotalSegmentator masks for msk-STAPLE
 
 // Features:
 //  - Reads either a folder of binary masks (*.nii.gz) or one multi-label NIfTI
@@ -6,19 +6,22 @@
 //  - Optional multi-label extraction via vtkDiscreteMarchingCubes with a label list
 //  - Smoothing via vtkWindowedSincPolyDataFilter (feature-preserving)
 //  - Auto-rename to msk-STAPLE conventions (e.g., femur_left -> femur_l)
-//  - Optional merge of tibia+fibula per side into single STL (msk‑STAPLE tibia includes fibula)
+//  - Optional merge of tibia+fibula per side into single mesh (msk‑STAPLE tibia includes fibula)
+//  - Output formats: STL (binary) or OBJ (text)
 //
 // Build deps: VTK >= 9.2 (Modules: CommonCore; IOImage; IOGeometry; FiltersCore; FiltersGeneral; FiltersSources; CommonDataModel)
 //
 // CLI
 //   ts2stl-staple --in <path_to_nii_or_dir> --out <out_dir> [--smooth_iters 30] [--passband 0.01]
 //                 [--feature_angle 120] [--multilabel] [--labels 1,2,3] [--merge_tibia_fibula]
-//                 [--binary_threshold 0.5]
+//                 [--binary_threshold 0.5] [--format stl|obj]
 // Examples:
 //   ts2stl-staple --in C:\data\TS_masks --out C:\data\stl --smooth_iters 40 --merge_tibia_fibula
-//   ts2stl-staple --in subject01_multilabel.nii.gz --out out --multilabel --labels 1,2,3
+//   ts2stl-staple --in C:\data\TS_masks --out C:\data\obj --format obj --smooth_iters 40
+//   ts2stl-staple --in subject01_multilabel.nii.gz --out out --multilabel --labels 1,2,3 --format obj
 //
 // NOTE: STL does not store vertex normals; "smoothing" here changes geometry (sinc fairing), not shading only.
+//       OBJ is a text format that preserves more metadata and can store normals.
 
 #include <vtkImageData.h>
 #include <vtkSmartPointer.h>
@@ -66,16 +69,6 @@ static void usage() {
                  "                 [--merge_tibia_fibula] [--smooth_iters N] [--passband P]\n"
                  "                 [--feature_angle A] [--binary_threshold T]\n";
 }
-
-static bool isStapleBoneFile(const std::string& nameLower){
-    // zpracuj jen relevantní kosti pro STAPLE lower-limb
-    const char* keys[] = {
-        "pelvis", "femur", "tibia", "fibula", "hip_left", "hip_right"
-    };
-    for (auto k : keys) if (nameLower.find(k) != std::string::npos) return true;
-    return false;
-}
-
 
 static std::optional<Args> parse(int argc, char** argv) {
     Args a;
@@ -249,16 +242,11 @@ int main(int argc, char** argv){
             if(!entry.is_regular_file()) continue;
             auto ext = lower(entry.path().extension().string());
             if(ext==".gz" || ext==".nii" || ext==".nrrd" ){
-                // narrow to .nii or .nii.gz masks by name patterns
-std::string name = lower(entry.path().filename().string());
-if (name.find(".nii") != std::string::npos) {
-    if (!isStapleBoneFile(name)) {
-        std::cout << "[INFO] Skipping non-bone mask: " << name << "\n";
-        continue;
-    }
-    std::cout << "[INFO] Meshing " << name << "...\n";
-    ok &= processBinaryMaskFile(entry.path(), a.out, a);
-}
+                std::string name = lower(entry.path().filename().string());
+                if (name.find(".nii") != std::string::npos) {
+                    std::cout << "[INFO] Meshing " << name << "...\n";
+                    ok &= processBinaryMaskFile(entry.path(), a.out, a);
+                }
 
             }
         }
