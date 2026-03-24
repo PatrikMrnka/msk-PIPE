@@ -120,7 +120,7 @@ rule cpp_mask2stl:
         smooth=config.get("mask_to_mesh", {}).get("smooth_iterations", 50),
     shell:
         """
-        "{params.cpp_bin}" --in {input.seg_dir} --out {output.models_dir} --smooth_iters {params.smooth}
+        "{params.cpp_bin}" --in {input.seg_dir} --out {output.models_dir} --smooth_iters {params.smooth} --format stl
         """
 
 

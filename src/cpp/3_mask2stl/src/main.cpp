@@ -31,6 +31,7 @@
 #include <vtkTriangleFilter.h>
 #include <vtkPolyData.h>
 #include <vtkSTLWriter.h>
+#include <vtkOBJWriter.h>
 #include <vtkImageMathematics.h>
 #include <vtkStringArray.h>
 #include <vtkPointData.h>
@@ -57,11 +58,13 @@ struct Args {
     double passband = 0.01; // typical 0.005-0.02
     double feature_angle = 120.0;
     double binary_threshold = 0.5;
+    std::string format = "stl"; // "stl" or "obj"
 };
 
 static void usage() {
-    std::cout << "ts2stl-staple --in <path> --out <dir> [--multilabel] [--labels a,b,c] [--merge_tibia_fibula]\n"
-                 "                 [--smooth_iters N] [--passband P] [--feature_angle A] [--binary_threshold T]\n";
+    std::cout << "ts2stl-staple --in <path> --out <dir> [--format stl|obj] [--multilabel] [--labels a,b,c]\n"
+                 "                 [--merge_tibia_fibula] [--smooth_iters N] [--passband P]\n"
+                 "                 [--feature_angle A] [--binary_threshold T]\n";
 }
 
 static bool isStapleBoneFile(const std::string& nameLower){
@@ -88,6 +91,7 @@ static std::optional<Args> parse(int argc, char** argv) {
         else if(s=="--passband"){ auto v=next(); if(!v) return {}; a.passband = std::stod(*v); }
         else if(s=="--feature_angle"){ auto v=next(); if(!v) return {}; a.feature_angle = std::stod(*v); }
         else if(s=="--binary_threshold"){ auto v=next(); if(!v) return {}; a.binary_threshold = std::stod(*v); }
+        else if(s=="--format"){ auto v=next(); if(!v) return {}; std::string fmt=*v; if(fmt=="stl"||fmt=="obj") a.format=fmt; else { std::cerr<<"Invalid format (must be stl or obj)\n"; return {}; } }
         else { std::cerr<<"Unknown arg: "<<s<<"\n"; usage(); return {}; }
     }
     if(a.in.empty() || a.out.empty()){ usage(); return {}; }
@@ -138,12 +142,19 @@ static vtkSmartPointer<vtkPolyData> smooth(vtkPolyData* pd, int iters, double pa
     return tri->GetOutput();
 }
 
-static bool writeSTL(const fs::path& outPath, vtkPolyData* pd){
-    vtkNew<vtkSTLWriter> w;
-    w->SetFileName(outPath.string().c_str());
-    w->SetInputData(pd);
-    w->SetFileTypeToBinary();
-    return w->Write()==1;
+static bool writePolyData(const fs::path& outPath, vtkPolyData* pd, const std::string& format){
+    if(format == "obj"){
+        vtkNew<vtkOBJWriter> w;
+        w->SetFileName(outPath.string().c_str());
+        w->SetInputData(pd);
+        return w->Write()==1;
+    } else { // default stl
+        vtkNew<vtkSTLWriter> w;
+        w->SetFileName(outPath.string().c_str());
+        w->SetInputData(pd);
+        w->SetFileTypeToBinary();
+        return w->Write()==1;
+    }
 }
 
 // Extract surface from a binary mask volume
@@ -183,8 +194,9 @@ static bool processBinaryMaskFile(const fs::path& file, const fs::path& outDir, 
 
 // C++17 varianta:
 if(ends_with(base, ".nii")) base = base.substr(0, base.size()-4);
-    fs::path out = outDir / (toStapleName(base) + ".stl");
-    return writeSTL(out, sm);
+    std::string ext = (a.format == "obj") ? ".obj" : ".stl";
+    fs::path out = outDir / (toStapleName(base) + ext);
+    return writePolyData(out, sm, a.format);
 }
 
 static bool processMultilabelFile(const fs::path& file, const fs::path& outDir, const Args& a){
@@ -194,24 +206,25 @@ static bool processMultilabelFile(const fs::path& file, const fs::path& outDir, 
         return false;
     }
     bool ok=true;
+    std::string ext = (a.format == "obj") ? ".obj" : ".stl";
     for(int lab: a.labels){
         auto pd = extractLabelSurface(img, lab);
         auto sm = smooth(pd, a.smooth_iters, a.passband);
-        fs::path out = outDir / (std::string("label_") + std::to_string(lab) + ".stl");
-        ok &= writeSTL(out, sm);
+        fs::path out = outDir / (std::string("label_") + std::to_string(lab) + ext);
+        ok &= writePolyData(out, sm, a.format);
     }
     return ok;
 }
 
-// Optional merge: tibia+fibula per side -> tibia_<side>.stl
-static void mergeTibiaFibulaIfPresent(const fs::path& outDir){
-    auto has = [&](const std::string& name){ return fs::exists(outDir / (name + ".stl")); };
+// Optional merge: tibia+fibula per side -> tibia_<side>.(stl|obj)
+static void mergeTibiaFibulaIfPresent(const fs::path& outDir, const std::string& format){
+    std::string ext = (format == "obj") ? ".obj" : ".stl";
     auto mergePair = [&](const std::string& side){
-        fs::path tib = outDir / ("tibia_"+side+".stl");
-        fs::path fib = outDir / ("fibula_"+side+".stl");
+        fs::path tib = outDir / ("tibia_"+side+ext);
+        fs::path fib = outDir / ("fibula_"+side+ext);
         if(!fs::exists(tib) || !fs::exists(fib)) return;
-        // Read back as polydata and append -> write into tibia_<side>.stl (overwrite)
-        // Simpler: re-extract from volumes before, but here we just note TODO since STL reader needs vtkSTLReader.
+        // Read back as polydata and append -> write into tibia_<side> (overwrite)
+        // Simpler: re-extract from volumes before, but here we just note TODO since reader needs platform-specific implementation.
         // For minimal deps, we skip reading & bool-union; users can keep both or merge upstream in mask stage.
         std::cout << "[INFO] Detected tibia_"<<side<<" and fibula_"<<side<<". Consider merging volumes before meshing for STAPLE.\n";
     };
@@ -253,7 +266,7 @@ if (name.find(".nii") != std::string::npos) {
         std::cerr<<"--in path is neither file nor directory\n"; return 1;
     }
 
-    if(a.merge_tibia_fibula) mergeTibiaFibulaIfPresent(a.out);
+    if(a.merge_tibia_fibula) mergeTibiaFibulaIfPresent(a.out, a.format);
 
     std::cout << (ok?"Done":"Finished with errors") << "\n";
     return ok?0:2;
