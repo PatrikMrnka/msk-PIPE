@@ -1,0 +1,16 @@
+name: msk_totalseg_gpu
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1
+  - nibabel
+  - numpy
+  - pip
+  - pip:
+    - TotalSegmentator

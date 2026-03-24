@@ -1,0 +1,15 @@
+name: msk_totalseg_cpu
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch
+  - torchvision
+  - cpuonly
+  - nibabel
+  - numpy
+  - pip
+  - pip:
+    - TotalSegmentator

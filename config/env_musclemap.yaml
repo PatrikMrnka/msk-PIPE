@@ -1,0 +1,7 @@
+name: msk_musclemap
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.8
+  - pip

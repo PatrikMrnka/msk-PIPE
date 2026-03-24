@@ -1,0 +1,17 @@
+name: msk_base
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12
+  - snakemake
+  - rich
+  - pydicom
+  - nibabel
+  - numpy
+  - colorama
+  - pip
+  - pip:
+    - matlabengine==25.2.2
+    - pymeshlab

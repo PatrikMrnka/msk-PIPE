@@ -1,0 +1,31 @@
+{
+    "paths": {
+        "input_dir": "data/input",
+        "temp_dir": "data/temp",
+        "output_dir": "data/output"
+    },
+    "snakemake_env": {
+        "totalseg": "env_totalseg_gpu.yaml"
+    },
+    "totalsegmentator": {
+        "fast": false,
+        "device": "gpu",
+        "model": "ct"
+    },
+    "mask_preproc": {
+        "min_voxels": 20000,
+        "opening_kernel": 2,
+        "closing_kernel": 2,
+        "fill_holes": true,
+        "keep_largest": true,
+        "inplace": true
+    },
+    "mask_to_mesh": {
+        "smooth_iterations": 50,
+        "relax_factor": 0.2,
+        "decimate_fraction": 0.1
+    },
+    "muscle_map": {
+        "default_model": "default"
+    }
+}
