@@ -1,0 +1,70 @@
+{
+    "Iliacus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMaximus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMedius": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMinimus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "Piriformis": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "BicepsFemoris": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "Pectineus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "AdductorMagnus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "AdductorBrevis": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "RectusFemoris": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "Psoas": {
+        "origin": "femur_r",
+        "insertion": "pelvis_no_sacrum"
+    },
+    "Sartorius": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "tibia_r"
+    },
+    "TensorFasciaLatae": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "tibia_r"
+    },
+    "Gracilis": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "tibia_r"
+    },
+    "Semitendinosus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "tibia_r"
+    },
+    "Semimembranosus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "tibia_r"
+    },
+    "AdductorLongus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    }
+}

@@ -1,20 +1,146 @@
 import os
+import sys
 from pathlib import Path
+import shutil
 
 
-# Načtení konfigurací uložených z runner.py
+# loading config files
 configfile: "config/config.json"
-configfile: "config/user_settings.yaml"
 
 
-# Definice základních adresářů pomocí globálního konfigu
+# base directories
 IN_DIR = config.get("paths", {}).get("input_dir", "data/input")
-TEMP_DIR = config.get("paths", {}).get("temp_dir", "data/temp")
-OUT_DIR = config.get("paths", {}).get("output_dir", "data/output")
+BASE_OUT_DIR = config.get("paths", {}).get("output_dir", "data/output")
+MW_PATH_DIR = config.get("paths", {}).get("muscle_wrapping_dir", "src/MW2/Build")
+STAPLE_PATH_DIR = config.get("paths", {}).get("staple_path", "src/STAPLE")
+MASK_TO_MESH_PATH_DIR = config.get("paths", {}).get(
+    "mask_to_mesh_path", "src/cpp/mask_to_mesh"
+)
+EXTRACT_ATTACHMENTS_PATH_DIR = config.get("paths", {}).get(
+    "extract_attachments_path", "src/cpp/extract_attachments"
+)
+
+# ---------------------------------------------------------------------------
+# Mapping from TotalSegmentator bone names → STAPLE-compatible mesh names.
+# Used by the rename_bones_for_staple rule.
+# Key: substring that must appear in the filename (lowercase).
+# Value: STAPLE base name (side suffix _l/_r is appended automatically).
+# ---------------------------------------------------------------------------
+STAPLE_NAME_MAP = {
+    "pelvis": "pelvis_no_sacrum",  # pelvis has no side suffix
+    "femur": "femur",
+    "tibia": "tibia",
+    "fibula": "fibula",
+    "talus": "talus",
+    "calcaneus": "calcn",
+    "calcn": "calcn",
+    "toes": "toes",
+    "metatarsals": "toes",
+}
+STAPLE_SIDELESS = {"pelvis_no_sacrum"}  # names that never get a side suffix
 
 
+def determine_run_id(base_out_dir):
+    """
+    Determines the appropriate RUN_ID based on existing runs in the output directory.
+    If no runs exist, it returns "run_1". If runs exist, it checks the latest run for the presence of the final output file (pipeline_model.osim).
+    If the final output exists, it increments the run number; if not, it returns the latest run ID to allow Snakemake to resume.
+    """
+    if not os.path.exists(base_out_dir):
+        return "run_1"
+
+    # find existing runs in the output directory
+    existing_runs = []
+    for d in os.listdir(base_out_dir):
+        if d.startswith("run_") and os.path.isdir(os.path.join(base_out_dir, d)):
+            try:
+                num = int(d.split("_")[1])
+                existing_runs.append(num)
+            except ValueError:
+                continue
+
+    if not existing_runs:
+        return "run_1"
+
+    latest_num = max(existing_runs)
+    latest_run = f"run_{latest_num}"
+
+    # is the final output from the latest run present?
+    final_target = os.path.join(base_out_dir, latest_run, "pipeline_model.osim")
+
+    if os.path.exists(final_target):
+        # successfully completed run exists, start a new one
+        return f"run_{latest_num+1}"
+    else:
+        # latest run is incomplete, resume it
+        return latest_run
+
+
+RUN_ID = determine_run_id(BASE_OUT_DIR)
+OUT_DIR = os.path.join(BASE_OUT_DIR, RUN_ID)
+os.makedirs(OUT_DIR, exist_ok=True)
+
+########################################################################################
+# Detecting input format and files
+
+INPUT_FORMAT = config.get("input_format", "auto").lower()
+INPUT_TYPE = None
+INPUT_FILES = {}
+
+in_dir_path = Path(IN_DIR)
+
+if INPUT_FORMAT in ["auto", "nifti"]:
+    nii_files = list(in_dir_path.rglob("*.nii.gz")) + list(in_dir_path.rglob("*.nii"))
+    if nii_files:
+        INPUT_TYPE = "nifti"
+        INPUT_FILES["nii"] = str(nii_files[0])
+
+# 2. Jsou na vstupu RAW data?
+if not INPUT_TYPE and INPUT_FORMAT in ["auto", "raw"]:
+    raw_files = list(in_dir_path.rglob("*.raw"))
+    if raw_files:
+        raw_file = raw_files[0]
+        # Hledání coordinates.txt
+        coords_files = list(raw_file.parent.glob("coordinates.txt")) or list(
+            in_dir_path.rglob("coordinates.txt")
+        )
+        if not coords_files:
+            sys.exit(f"[ERROR] Nalezen RAW, ale chybí coordinates.txt pro {raw_file}")
+
+        INPUT_TYPE = "raw"
+        INPUT_FILES["raw"] = str(raw_file)
+        INPUT_FILES["coords"] = str(coords_files[0])
+
+# 3. Jsou na vstupu DICOMy?
+if not INPUT_TYPE and INPUT_FORMAT in ["auto", "dicom"]:
+    # Nejprve zkusíme rovnou příponu .dcm
+    dcm_files = list(in_dir_path.rglob("*.dcm"))
+    if dcm_files:
+        INPUT_TYPE = "dicom"
+        INPUT_FILES["dicom_dir"] = str(dcm_files[0].parent)
+    else:
+        # Záchyt pro DICOMy bez přípony (nesmí to být coordinates.txt)
+        for d in [in_dir_path] + [sub for sub in in_dir_path.iterdir() if sub.is_dir()]:
+            has_dicom = any(
+                f.is_file() and f.suffix == "" and f.name.lower() != "coordinates.txt"
+                for f in d.iterdir()
+            )
+            if has_dicom:
+                INPUT_TYPE = "dicom"
+                INPUT_FILES["dicom_dir"] = str(d)
+                break
+
+# Kontrola, zda jsme něco našli
+if not INPUT_TYPE:
+    sys.exit(
+        f"[ERROR] Nebyly nalezeny žádné vstupní soubory pro formát '{INPUT_FORMAT}' ve složce {IN_DIR}."
+    )
+
+########################################################################################
+
+
+# help func for getting the right python executable for each step
 def get_py_exe(env_name):
-    import os
 
     exe = (
         f"envs/{env_name}/python.exe"
@@ -24,11 +150,19 @@ def get_py_exe(env_name):
     return os.path.normpath(exe)
 
 
-# Vychozi cil - vysledny OSIM model z MS Muscle Wrapping
+########################################################################################
+# GOAL to achieve by pipeline
+
+
 rule all:
     input:
-        os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
-        os.path.join(TEMP_DIR, "muscle_models"),
+        os.path.join(OUT_DIR, "bone_model.osim"),
+        os.path.join(OUT_DIR, "muscle_models"),
+        os.path.join(OUT_DIR, "setup_MuscleGeneratorTool.xml"),
+        os.path.join(OUT_DIR, "pipeline_model.osim"),
+
+
+########################################################################################
 
 
 # KROK 0: Validace vstupních souborů
@@ -38,24 +172,79 @@ rule all:
 #     script:
 #         "scripts/validate_inputs.py"
 
+########################################################################################
+# 1. STEP - LOADING DATA
 
-# KROK 1: Načtení dat a sjednocení do pracovního formátu (NIfTI).
-rule load_image:
-    input:
-        in_dir=IN_DIR,
-        # validation=os.path.join(TEMP_DIR, "validation_passed.tmp"),
-    output:
-        nii=temp(os.path.join(TEMP_DIR, "ct.nii.gz")),
-    script:
-        "scripts/load_image.py"
+if INPUT_TYPE == "nifti":
+
+    rule prepare_input_nifti:
+        input:
+            nii=INPUT_FILES["nii"],
+        output:
+            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+        run:
+            Path(output.nii).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(input.nii, output.nii)
+
+elif INPUT_TYPE == "raw":
+
+    rule prepare_input_raw:
+        input:
+            raw=INPUT_FILES["raw"],
+            coords=INPUT_FILES["coords"],
+        output:
+            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+        params:
+            py_exe=get_py_exe("msk_base"),
+            dims=lambda w: config.get("raw_parameters", {})
+            .get(Path(INPUT_FILES["raw"]).name, {})
+            .get("dimensions", "512x512x120"),
+        shell:
+            """
+            "{params.py_exe}" src/python/converting_formats/CT_raw_to_nifti.py \
+                "{input.raw}" "{input.coords}" -o "{output.nii}" --shape {params.dims}
+            """
+
+elif INPUT_TYPE == "dicom":
+
+    rule prepare_input_dicom:
+        input:
+            dcm_dir=INPUT_FILES["dicom_dir"],
+        output:
+            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+        params:
+            py_exe=get_py_exe("msk_base"),
+        shell:
+            """
+            "{params.py_exe}" src/python/converting_formats/CT_dicom_to_nifti.py \
+                "{input.dcm_dir}" -o "{output.nii}"
+            """
 
 
-# KROK 2a: Segmentace kostí pomocí TotalSegmentatoru.
+# END OF LOADING DATA
+########################################################################################
+
+# # KROK 1: Načtení dat a sjednocení do pracovního formátu (NIfTI).
+# rule load_image:
+#     input:
+#         in_dir=IN_DIR,
+#         # validation=os.path.join(TEMP_DIR, "validation_passed.tmp"),
+#     output:
+#         nii=temp(os.path.join(TEMP_DIR, "ct.nii.gz")),
+#     script:
+#         "scripts/load_image.py"
+
+
+########################################################################################
+# 2. STEP - BONE AND MUSCLE SEGMENTATION
+
+
+# 2a
 rule total_segmentator_raw:
     input:
-        nii=os.path.join(TEMP_DIR, "ct.nii.gz"),
+        nii=os.path.join(OUT_DIR, "image", "ct.nii.gz"),
     output:
-        seg_raw_dir=directory(os.path.join(TEMP_DIR, "segmentations_raw")),
+        seg_raw_dir=directory(os.path.join(OUT_DIR, "bone_segmentations", "raw")),
     params:
         py_exe=lambda wildcards: get_py_exe(
             config["snakemake_env"]["totalseg"]
@@ -67,7 +256,7 @@ rule total_segmentator_raw:
         fast="--fast" if config["totalsegmentator"]["fast"] else "",
     shell:
         """
-        "{params.py_exe}" src/python/02_mask_preproc/2_run_totalsegmentator.py {input.nii} \
+        "{params.py_exe}" src/python/bones_segmentation/run_totalsegmentator.py {input.nii} \
             --output-dir {output.seg_raw_dir} \
             --device {params.device} \
             --model {params.model} \
@@ -75,11 +264,12 @@ rule total_segmentator_raw:
         """
 
 
+# 2b - muscles
 rule muscle_map_raw:
     input:
-        nii=os.path.join(TEMP_DIR, "ct.nii.gz"),
+        nii=os.path.join(OUT_DIR, "image", "ct.nii.gz"),
     output:
-        seg_raw_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations_raw")),
+        seg_raw_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "raw")),
     params:
         py_exe=lambda wildcards: get_py_exe(
             config["snakemake_env"]["musclemap"]
@@ -88,17 +278,23 @@ rule muscle_map_raw:
         ),
     shell:
         """
-        "{params.py_exe}" src/python/02a_muscles_segm/2a_run_musclemap.py {input.nii} \
+        "{params.py_exe}" src/python/muscles_segmentation_extraction/run_musclemap.py {input.nii} \
             --output-dir {output.seg_raw_dir}
         """
 
 
-# KROK 2b: Extrakce požadovaných svalů z MuscleMap multi-label segmentace
+# END OF BONE AND MUSCLE SEGMENTATION
+########################################################################################
+
+########################################################################################
+# 3. STEP - EXTRACTING MUSCLE MASKS FROM MUSCLEMAP OUTPUT
+
+
 rule extract_muscle_masks:
     input:
-        seg_raw_dir=os.path.join(TEMP_DIR, "muscle_segmentations_raw"),
+        seg_raw_dir=os.path.join(OUT_DIR, "muscle_segmentations", "raw"),
     output:
-        seg_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations_extracted")),
+        seg_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "extracted")),
     params:
         py_exe=lambda wildcards: get_py_exe(
             config["snakemake_env"]["musclemap"]
@@ -107,28 +303,65 @@ rule extract_muscle_masks:
         ),
     shell:
         """
-        "{params.py_exe}" src/python/02a_muscles_segm/2b_clean_muscle_masks.py \
+        "{params.py_exe}" src/python/muscles_segmentation_extraction/extract_muscle_masks.py \
             {input.seg_raw_dir}/musclemap_segmentation.nii.gz \
             --output-dir {output.seg_dir} \
             --config config/config.json
         """
 
 
-# KROK 2c: Čištění svalových masek pomocí sdíleného nástroje
-rule clean_muscle_masks:
+########################################################################################
+
+########################################################################################
+# 4. STEP - CLEANING SEGMENTATIONS (BOTH BONES AND MUSCLES)
+
+
+# 4a - bones
+rule clean_bones_masks:
     input:
-        seg_raw_dir=os.path.join(TEMP_DIR, "muscle_segmentations_extracted"),
+        seg_raw_dir=os.path.join(OUT_DIR, "bone_segmentations", "raw"),
     output:
-        seg_dir=directory(os.path.join(TEMP_DIR, "muscle_segmentations")),
+        seg_dir=directory(os.path.join(OUT_DIR, "bone_segmentations", "cleaned")),
     params:
         py_exe=lambda wildcards: get_py_exe(
             config["snakemake_env"]["totalseg"]
             .replace("env_", "msk_")
             .replace(".yaml", "")
         ),
-        min_v=config.get("muscle_preproc", {}).get("min_voxels", 100),
-        open_k=config.get("muscle_preproc", {}).get("opening_kernel", 3),
-        clos_k=config.get("muscle_preproc", {}).get("closing_kernel", 3),
+        keep_l="--keep-largest" if config["bone_preprocessing"]["keep_largest"] else "",
+        holes="--fill-holes" if config["bone_preprocessing"]["fill_holes"] else "",
+        min_v=config["bone_preprocessing"]["min_voxels"],
+        open_k=config["bone_preprocessing"]["opening_kernel"],
+        clos_k=config["bone_preprocessing"]["closing_kernel"],
+    shell:
+        """
+        "{params.py_exe}" src/python/clean_masks.py \
+            --input-dir {input.seg_raw_dir} \
+            --output-dir {output.seg_dir} \
+            --labels femur_l femur_r hip_left hip_right \
+            --min-voxels {params.min_v} \
+            --opening {params.open_k} \
+            --closing {params.clos_k} \
+            {params.keep_l} \
+            {params.holes}
+        """
+
+
+# 4b - muscles
+rule clean_muscle_masks:
+    input:
+        seg_raw_dir=os.path.join(OUT_DIR, "muscle_segmentations", "extracted"),
+    output:
+        seg_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "cleaned")),
+    params:
+        py_exe=lambda wildcards: get_py_exe(
+            config["snakemake_env"]["totalseg"]
+            .replace("env_", "msk_")
+            .replace(".yaml", "")
+        ),
+        min_v=config.get("muscle_preprocessing", {}).get("min_voxels", 100),
+        open_k=config.get("muscle_preprocessing", {}).get("opening_kernel", 3),
+        clos_k=config.get("muscle_preprocessing", {}).get("closing_kernel", 3),
         holes=(
             "--fill-holes"
             if config.get("muscle_preproc", {}).get("fill_holes", True)
@@ -141,7 +374,7 @@ rule clean_muscle_masks:
         ),
     shell:
         """
-        "{params.py_exe}" src/python/02_mask_preproc/2_clean_masks.py \
+        "{params.py_exe}" src/python/clean_masks.py \
             --input-dir {input.seg_raw_dir} \
             --output-dir {output.seg_dir} \
             --iso 0.5 \
@@ -153,151 +386,208 @@ rule clean_muscle_masks:
         """
 
 
-# KROK 2d: Obecné čištění masek
-rule clean_masks:
+########################################################################################
+# 5. STEP - CONVERTING MASKS TO MESHES
+
+
+# 5a - bones: convert cleaned NIfTI masks → STL meshes (names kept as-is)
+rule bone_mask_to_stl:
     input:
-        seg_raw_dir=os.path.join(TEMP_DIR, "segmentations_raw"),
+        seg_dir=os.path.join(OUT_DIR, "bone_segmentations", "cleaned"),
     output:
-        seg_dir=directory(os.path.join(TEMP_DIR, "segmentations")),
+        models_dir=directory(os.path.join(OUT_DIR, "bone_models")),
     params:
-        py_exe=lambda wildcards: get_py_exe(
-            config["snakemake_env"]["totalseg"]
-            .replace("env_", "msk_")
-            .replace(".yaml", "")
-        ),
-        keep_l="--keep-largest" if config["mask_preproc"]["keep_largest"] else "",
-        holes="--fill-holes" if config["mask_preproc"]["fill_holes"] else "",
-        min_v=config["mask_preproc"]["min_voxels"],
-        open_k=config["mask_preproc"]["opening_kernel"],
-        clos_k=config["mask_preproc"]["closing_kernel"],
+        cpp_bin="src/cpp/mask_to_mesh/Build/Release/mask_to_mesh.exe",
+        smooth=config.get("bone_to_mesh", {}).get("smooth_iterations", 30),
+        passband=config.get("bone_to_mesh", {}).get("passband", 0.01),
     shell:
         """
-        "{params.py_exe}" src/python/02_mask_preproc/2_clean_masks.py \
-            --input-dir {input.seg_raw_dir} \
-            --output-dir {output.seg_dir} \
-            --labels femur_l femur_r hip_left hip_right \
-            --min-voxels {params.min_v} \
-            --opening {params.open_k} \
-            --closing {params.clos_k} \
-            {params.keep_l} \
-            {params.holes}
+        "{params.cpp_bin}" \
+            --input-dir  {input.seg_dir} \
+            --output-dir {output.models_dir} \
+            --smooth_iters {params.smooth} \
+            --passband {params.passband} \
+            --format stl
         """
 
 
-# KROK 3a: Zavolání zkompilovaného C++ programu pro převod masek kostí na 3D sítě (STL)
-rule cpp_mask2stl:
+# 5a' - rename bone STLs to STAPLE-compatible names (e.g. femur_left → femur_l)
+#        Logic moved here from C++ so the mapping is visible in the workflow.
+rule rename_bones_for_staple:
     input:
-        seg_dir=os.path.join(TEMP_DIR, "segmentations"),
+        models_dir=os.path.join(OUT_DIR, "bone_models"),
     output:
-        models_dir=directory(os.path.join(TEMP_DIR, "models")),
+        renamed_dir=directory(os.path.join(OUT_DIR, "bone_models_renamed")),
+    run:
+        import shutil
+
+        os.makedirs(output.renamed_dir, exist_ok=True)
+
+        def staple_name(stem: str) -> str:
+            """Map a TotalSegmentator bone stem to its STAPLE-compatible name."""
+            s = stem.lower()
+            # Detect anatomical side
+            if "left" in s or s.endswith("_l") or "_left_" in s:
+                side = "_l"
+            elif "right" in s or s.endswith("_r") or "_right_" in s:
+                side = "_r"
+            else:
+                side = ""
+            # Match against the name map
+            for keyword, staple_base in STAPLE_NAME_MAP.items():
+                if keyword in s:
+                    if staple_base in STAPLE_SIDELESS:
+                        return staple_base  # no side suffix
+                    return staple_base + side  # e.g. femur_l
+            return stem  # unrecognised: keep original name
+
+        for src in Path(input.models_dir).glob("*.stl"):
+            new_name = staple_name(src.stem) + ".stl"
+            dst = Path(output.renamed_dir) / new_name
+            print(f"[rename] {src.name} → {new_name}")
+            shutil.copy2(src, dst)
+
+
+
+# 5b - muscles: convert cleaned NIfTI masks → OBJ meshes
+rule muscle_mask_to_obj:
+    input:
+        seg_dir=os.path.join(OUT_DIR, "muscle_segmentations", "cleaned"),
+    output:
+        models_dir=directory(os.path.join(OUT_DIR, "muscle_models")),
     params:
-        cpp_bin=(
-            "src/cpp/3_mask2stl/build/Release/mask2stl.exe"
-            if os.name == "nt"
-            else "src/cpp/3_mask2stl/build/mask2stl"
-        ),
-        smooth=config.get("mask_to_mesh", {}).get("smooth_iterations", 50),
+        cpp_bin="src/cpp/mask_to_mesh/Build/Release/mask_to_mesh.exe",
+        smooth=config.get("muscle_to_mesh", {}).get("smooth_iterations", 30),
+        passband=config.get("muscle_to_mesh", {}).get("passband", 0.005),
     shell:
         """
-        "{params.cpp_bin}" --in {input.seg_dir} --out {output.models_dir} --smooth_iters {params.smooth} --format stl
+        "{params.cpp_bin}" \
+            --input-dir  {input.seg_dir} \
+            --output-dir {output.models_dir} \
+            --smooth_iters {params.smooth} \
+            --passband {params.passband} \
+            --format obj
         """
 
 
-# KROK 3a-bis: Zavolání zkompilovaného C++ programu pro převod svalových masek na 3D sítě (OBJ)
-rule cpp_muscle_mask2obj:
-    input:
-        seg_dir=os.path.join(TEMP_DIR, "muscle_segmentations"),
-    output:
-        models_dir=directory(os.path.join(TEMP_DIR, "muscle_processed")),
-    params:
-        cpp_bin=(
-            "src/cpp/3_mask2stl/build/Release/mask2stl.exe"
-            if os.name == "nt"
-            else "src/cpp/3_mask2stl/build/mask2stl"
-        ),
-        smooth=config.get("mask_to_mesh", {}).get("smooth_iterations", 30),
-    shell:
-        """
-        "{params.cpp_bin}" --in {input.seg_dir} --out {output.models_dir} --smooth_iters {params.smooth} --format obj
-        """
+########################################################################################
+# 6. STEP - MERGING AND PROCESSING MESHES, PREPARING FOR STAPLE
 
 
-# KROK 3b: Sloučení a zpracování vygenerovaných meshe z C++ programu
+# 6a - merging STAPLE-renamed bone meshes into a single directory for STAPLE
 rule merge_meshes:
     input:
-        models_dir=os.path.join(TEMP_DIR, "models"),
+        models_dir=os.path.join(OUT_DIR, "bone_models_renamed"),
     output:
-        meshes_dir=directory(os.path.join(TEMP_DIR, "meshes_processed")),
+        meshes_dir=directory(os.path.join(OUT_DIR, "bone_models_merged")),
     params:
         py_exe=get_py_exe("msk_base"),
     shell:
         """
-        "{params.py_exe}" src/python/04_merge_mesh/4_mesh.py --input {input.models_dir} --output {output.meshes_dir}
-        """
-
-rule merge_muscle_meshes:
-    input:
-        models_dir=os.path.join(TEMP_DIR, "muscle_processed"),
-    output:
-        meshes_dir=directory(os.path.join(TEMP_DIR, "muscle_models")),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    shell:
-        """
-        "{params.py_exe}" src/python/04_merge_mesh/4_mesh.py --input {input.models_dir} --output {output.meshes_dir} --merge-lr-pairs
+        "{params.py_exe}" src/python/merge_meshes.py \
+            --input-dir  {input.models_dir} \
+            --output-dir {output.meshes_dir}
         """
 
 
-# KROK 4: Spuštění MATLAB skriptu přes Python MATLAB Engine
+# 6b - running STAPLE for generating the final .osinm model
 rule msk_staple:
     input:
-        mesh_dir=os.path.join(TEMP_DIR, "meshes_processed"),
+        mesh_dir=os.path.join(OUT_DIR, "bone_models_merged"),
+        matlab_script="src/python/staple_processing/hip_model.m",
     output:
-        osim=os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
+        osim=os.path.join(OUT_DIR, "bone_model.osim"),
+        geom_dir=directory(os.path.join(OUT_DIR, "Geometry")),
+    params:
+        py_exe=get_py_exe("msk_base"),
+        staple_path=config.get("paths", {}).get("staple_path"),
+    shell:
+        """
+        "{params.py_exe}" src/python/staple_processing/process_staple.py \
+            --input-dir "{input.mesh_dir}" \
+            --output-osim "{output.osim}" \
+            --output-geom-dir "{output.geom_dir}" \
+            --staple-path "{params.staple_path}" \
+            --matlab-script "{input.matlab_script}"
+        """
+
+
+########################################################################################
+# 7. STEP - EXTRACTING ATTACHMENT AREAS FROM MUSCLES
+
+
+rule extract_attachments:
+    input:
+        bones_dir=os.path.join(OUT_DIR, "Geometry"),
+        muscles_dir=os.path.join(OUT_DIR, "muscle_models"),
+    output:
+        vtks_dir=directory(os.path.join(OUT_DIR, "attachments")),
+    params:
+        py_exe=get_py_exe("msk_base"),
+        cpp_bin=(
+            "src/cpp/extract_attachments/build/Release/extract_attachments.exe"
+            if os.name == "nt"
+            else "src/cpp/extract_attachments/build/extract_attachments"
+        ),
+        threshold=config.get("attachment_extraction", {}).get("threshold_mm", 1.0),
+    shell:
+        """
+        "{params.py_exe}" src/python/extract_attachments_runner/run_extraction.py \
+            --bones     {input.bones_dir} \
+            --muscles   {input.muscles_dir} \
+            --topology  config/muscle_topology.json \
+            --out-dir   {output.vtks_dir} \
+            --threshold {params.threshold} \
+            --cpp-bin   "{params.cpp_bin}"
+        """
+
+
+########################################################################################
+
+########################################################################################
+# 8. STEP - PREPARING XML CONFIGURATION FOR MUSCLE WRAPPING
+
+
+# KROK 6b: Generování XML konfigurace pro Muscle Wrapping 2.0
+rule prepare_muscle_wrapping:
+    input:
+        osim=os.path.join(OUT_DIR, "bone_model.osim"),
+        muscles_dir=os.path.join(OUT_DIR, "muscle_models"),
+        vtks_dir=os.path.join(OUT_DIR, "attachments"),
+    output:
+        xml=os.path.join(OUT_DIR, "setup_MuscleGeneratorTool.xml"),
     params:
         py_exe=get_py_exe("msk_base"),
     shell:
         """
-        "{params.py_exe}" workflow/scripts/run_staple.py --input-meshes {input.mesh_dir} --output-osim {output.osim} --staple-path "{config[staple_path]}"
+        "{params.py_exe}" src/python/extract_attachments_runner/generate_attachment_xml.py \
+            --osim      {input.osim} \
+            --muscles   {input.muscles_dir} \
+            --vtks      {input.vtks_dir} \
+            --topology  config/muscle_topology.json \
+            --out-xml   {output.xml}
         """
 
 
-# KROK 5: Segmentace svalů a export sítí
-# rule muscle_map:
-#     input:
-#         nii=os.path.join(TEMP_DIR, "ct.nii.gz"),
-#         osim_bone=os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
-#     output:
-#         muscle_meshes=directory(os.path.join(TEMP_DIR, "muscle_meshes")),
-#     params:
-#         py_exe=get_py_exe("msk_musclemap"),
-#     shell:
-#         """
-#         "{params.py_exe}" workflow/scripts/run_muscle_map.py --nifti {input.nii} --osim {input.osim_bone} --out-dir {output.muscle_meshes}
-#         """
-# # KROK 6: Získání úponových oblastí svalů a vygenerování XML pro MS Wrapping 2.0
-# # rule prepare_muscle_wrapping:
-# #     input:
-# #         muscle_meshes=os.path.join(TEMP_DIR, "muscle_meshes"),
-# #         osim_bone=os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
-# #     output:
-# #         xml=os.path.join(TEMP_DIR, "wrapping_config.xml"),
-# #     shell:
-# #         """
-# #         python src/python/05_extract_attachments/generate_attachment_xml.py \
-# #             --meshes {input.muscle_meshes} \
-# #             --osim {input.osim_bone} \
-# #             --out-xml {output.xml}
-# #         """
-# # # KROK 7: Zavolání C++ programu MS Wrapping 2.0
-# # # rule muscle_wrapping:
-# # #     input:
-# # #         xml=os.path.join(TEMP_DIR, "wrapping_config.xml"),
-# # #         muscle_meshes=os.path.join(TEMP_DIR, "muscle_meshes"),
-# # #         osim_bone=os.path.join(TEMP_DIR, "output_STAPLE", "bone_model.osim"),
-# # #     output:
-# # #         final_osim=os.path.join(OUT_DIR, "final_model_with_muscles.osim"),
-# # #     shell:
-# # #         """
-# # #         "{config[muscle_wrapping_path]}" --config {input.xml} --output {output.final_osim}
-# # #         """
+########################################################################################
+
+########################################################################################
+# 9. STEP - RUNNING MUSCLE WRAPPING
+
+
+rule run_muscle_wrapping:
+    input:
+        xml=os.path.join(OUT_DIR, "setup_MuscleGeneratorTool.xml"),
+    output:
+        osim=os.path.join(OUT_DIR, "pipeline_model.osim"),
+    params:
+        workdir=OUT_DIR,
+        opensim=Path(MW_PATH_DIR, "Bin", "opensim-cmd.exe").resolve(),
+        dll=Path(MW_PATH_DIR, "Bin", "OsimMuscleGeneratorTool.dll").resolve(),
+    shell:
+        r"""
+        "{params.opensim}" -L "{params.dll}" run-tool "{input.xml}"
+        """
+
+
+########################################################################################

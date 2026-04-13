@@ -1,8 +1,20 @@
 {
+    "user_settings": {
+        "auto_run_pipeline": true,
+        "generate_snakemake_report": true,
+        "has_gpu": true,
+        "input_format": "nifti",
+        "skip_preflight_checks": true,
+        "snakemake_cores": "all"
+    },
     "paths": {
         "input_dir": "data/input",
-        "temp_dir": "data/temp",
-        "output_dir": "data/output"
+        "output_dir": "data/output",
+        "extract_attachments_path": "C:\\msk_pipe\\src\\cpp\\extract_attachments",
+        "mask_to_mesh_path": "C:\\msk_pipe\\src\\cpp\\mask_to_mesh",
+        "muscle_wrapping_path": "C:\\msk_pipe\\src\\MW2\\Build",
+        "staple_path": "src\\STAPLE",
+        "vtk_path": "C:\\msk_pipe\\src\\MW2\\Build\\ExternalLibs\\VTK\\Bin\\lib\\cmake\\vtk-9.4"
     },
     "snakemake_env": {
         "totalseg": "env_totalseg_gpu.yaml",
@@ -13,37 +25,75 @@
         "device": "gpu",
         "model": "ct"
     },
-    "mask_preproc": {
-        "min_voxels": 20000,
-        "opening_kernel": 2,
-        "closing_kernel": 2,
+    "bone_preprocessing": {
+        "min_voxels": 2000,
+        "opening_kernel": 1,
+        "closing_kernel": 1,
         "fill_holes": true,
         "keep_largest": true,
         "inplace": true
     },
-    "mask_to_mesh": {
+    "bone_to_mesh": {
         "smooth_iterations": 50,
-        "relax_factor": 0.2,
-        "decimate_fraction": 0.1
+        "passband": 0.01
+    },
+    "muscle_preprocessing": {
+        "min_voxels": 5000,
+        "opening_kernel": 1,
+        "closing_kernel": 3,
+        "fill_holes": true,
+        "keep_largest": true
+    },
+    "muscle_to_mesh": {
+        "smooth_iterations": 60,
+        "passband": 0.005
+    },
+    "attachment_extraction": {
+        "threshold_mm": 2.0
     },
     "muscle_map": {
         "default_model": "default",
         "labels": {
             "adductor_brevis_l": 7221,
             "adductor_brevis_r": 7222,
-            "gluteus_medius_l": 6111,
-            "gluteus_medius_r": 6112,
+            "adductor_longus_l": 7211,
+            "adductor_longus_r": 7212,
+            "adductor_magnus_l": 7201,
+            "adductor_magnus_r": 7202,
+            "biceps_femoris_l": 7181,
+            "biceps_femoris_r": 7182,
             "gluteus_maximus_l": 6121,
             "gluteus_maximus_r": 6122,
+            "gluteus_medius_l": 6111,
+            "gluteus_medius_r": 6112,
+            "gluteus_minimus_l": 6101,
+            "gluteus_minimus_r": 6102,
+            "gracilis_l": 7151,
+            "gracilis_r": 7152,
             "iliacus_l": 6141,
-            "iliacus_r": 6142
+            "iliacus_r": 6142,
+            "pectineus_l": 6191,
+            "pectineus_r": 6192,
+            "piriformis_l": 6181,
+            "piriformis_r": 6182,
+            "psoas_major_l": 5121,
+            "psoas_major_r": 5122,
+            "rectus_femoris_l": 7131,
+            "rectus_femoris_r": 7132,
+            "sartorius_l": 7141,
+            "sartorius_r": 7142,
+            "semimembranosus_l": 7161,
+            "semimembranosus_r": 7162,
+            "semitendinosus_l": 7171,
+            "semitendinosus_r": 7172,
+            "tensor_fasciae_latae_l": 6131,
+            "tensor_fasciae_latae_r": 6132
         }
     },
-    "muscle_preproc": {
-        "min_voxels": 100,
-        "opening_kernel": 3,
-        "closing_kernel": 3,
-        "fill_holes": true,
-        "keep_largest": true
+    "env_file_hashes": {
+        "msk_base": "ba480f24ed839287a2efcdd757446985331142269ceea9f919c5ce23f6275f3a",
+        "msk_totalseg_cpu": "c802bebc4368c3dcf43bb7696c32d92bc4525446b21c53c2be6645de1ace0aa4",
+        "msk_totalseg_gpu": "e94ef527d425bf8026dab45e98cea5003200c6dacac4bfdd44e51024ee8a5045",
+        "msk_musclemap_gpu": "955f2032a8f4c20ad6c52ae6651bd0dbb6f6e317945a00b8bfddb89788683557"
     }
 }
