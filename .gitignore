@@ -3,7 +3,8 @@
 install
 envs
 bin
-output
+data/
+output/
 instrukce.md
 *build*
 backup
@@ -14,3 +15,7 @@ src/cpp/6_extract_attachments/examples
 STAPLE
 MW2
 MuscleMap
+*.nii.gz
+*.raw
+*.vtk
+*.dcm
