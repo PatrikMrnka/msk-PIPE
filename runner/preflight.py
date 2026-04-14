@@ -70,7 +70,16 @@ def _abort(reason: str) -> None:
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 
-def main() -> None:
+def main(input_path: str | None = None) -> None:
+    """Run all pre-flight checks and hand off to the pipeline.
+
+    Parameters
+    ----------
+    input_path:
+        Optional explicit input file or directory provided via ``--input``.
+        When set, it is stored in ``config["paths"]["input_path"]`` so the
+        Snakefile can pick it up.
+    """
     print_header()
 
     # 1. Load persisted state
@@ -78,6 +87,10 @@ def main() -> None:
     config = load_config(C.MAIN_CONFIG_PATH)
     user_settings = config.setdefault("user_settings", {})
     paths = config.setdefault("paths", {})
+
+    # Store explicit input path (if provided via CLI).
+    if input_path:
+        paths["input_path"] = str(Path(input_path).resolve())
 
     # Migrate paths and env_file_hashes if they exist in user_settings
     for path_key in ["muscle_wrapping_path", "staple_path", "mask_to_mesh_path", "vtk_path", "extract_attachments_path"]:

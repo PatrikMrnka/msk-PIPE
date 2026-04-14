@@ -89,18 +89,22 @@ bool AttachmentExtractor::load_muscle(const std::string& filepath) {
 // ----------------------------------------------------------------
 // extract
 //
-// Core algorithm (locator is already built in load_bone):
+// Core algorithm (the locator is already built in load_bone):
 //
-// 1. Iterate over every vertex in the muscle mesh.
-// 2. For each vertex, query the pre-built locator for the closest
-//    point on the bone surface.
-// 3. vtkStaticCellLocator::FindClosestPoint returns the squared
-//    distance (dist2). Compare against threshold_sq to avoid sqrt
-//    on every iteration.
-// 4. Accepted vertices are added to attachment_points_.
+// 1. Compute the distance from every muscle vertex to the nearest
+//    point on the bone surface (using the pre-built locator).
+// 2. Store the distance as a per-vertex scalar on a copy of the
+//    muscle mesh.
+// 3. Clip the muscle to keep only the region within the threshold
+//    distance (this produces the "attachment patch").
+// 4. Extract the boundary edges of the attachment patch.
+// 5. Order the edges into a continuous polyline contour.
+// 6. Decimate the polyline to reduce the point count.
+// 7. Select the longest contour and store its points.
 //
-// Complexity: O(M) where M = muscle vertices,
-// instead of O(M * N) brute-force.
+// Complexity: O(M) where M = number of muscle vertices (each
+//   locator query is O(1) amortised), instead of O(M * N) brute
+//   force.
 // ----------------------------------------------------------------
 std::size_t AttachmentExtractor::extract(double max_distance_mm) {
     if (!bone_mesh_ || !muscle_mesh_) {
@@ -108,14 +112,14 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
         return 0;
     }
     if (!locator_) {
-        std::cerr << "[error] locator not initialised – call load_bone() first\n";
+        std::cerr << "[error] locator not initialised -- call load_bone() first\n";
         return 0;
     }
 
     attachment_points_ = vtkSmartPointer<vtkPoints>::New();
     const vtkIdType num_muscle_points = muscle_mesh_->GetNumberOfPoints();
 
-    // 1. Spočítáme vzdálenosti a uložíme je jako Point Data svalu
+    // 1. Compute per-vertex distance to bone and store as point data.
     auto distances = vtkSmartPointer<vtkDoubleArray>::New();
     distances->SetName("DistanceToBone");
     distances->SetNumberOfComponents(1);
@@ -131,29 +135,30 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
         double muscle_point[3];
         muscle_mesh_->GetPoint(i, muscle_point);
         locator_->FindClosestPoint(muscle_point, closest_point, generic_cell, cell_id, sub_id, dist2);
-        
-        // Vkládáme skutečnou vzdálenost (ne kvadrát), protože clip pracuje s přesnými hodnotami
-        distances->SetValue(i, std::sqrt(dist2)); 
+
+        // Store the actual distance (not squared) because the clip filter
+        // operates on exact values.
+        distances->SetValue(i, std::sqrt(dist2));
     }
-    
-    // Kopie svalu pro bezpečné modifikace skalárů
+
+    // Deep-copy the muscle so we can safely attach the distance scalars.
     auto muscle_copy = vtkSmartPointer<vtkPolyData>::New();
     muscle_copy->DeepCopy(muscle_mesh_);
     muscle_copy->GetPointData()->SetScalars(distances);
 
-    // 2. Vyřízneme "záplatu" svalu, která je blíže než max_distance_mm
+    // 2. Clip the muscle to keep only the patch closer than the threshold.
     auto clipper = vtkSmartPointer<vtkClipPolyData>::New();
     clipper->SetInputData(muscle_copy);
     clipper->SetValue(max_distance_mm);
-    clipper->InsideOutOn(); // InsideOutOn znamená, že chceme zachovat hodnoty MENŠÍ než threshold
+    clipper->InsideOutOn();  // keep values LESS than the threshold
     clipper->Update();
 
     auto attached_patch = clipper->GetOutput();
     if (attached_patch->GetNumberOfPoints() == 0) {
-        return 0; // Sval není v dosahu kosti
+        return 0;  // muscle is not within range of the bone
     }
 
-    // 3. Extrahujeme obvodové hrany záplaty
+    // 3. Extract the boundary edges of the attachment patch.
     auto edges = vtkSmartPointer<vtkFeatureEdges>::New();
     edges->SetInputData(attached_patch);
     edges->BoundaryEdgesOn();
@@ -162,27 +167,25 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
     edges->ManifoldEdgesOff();
     edges->Update();
 
-    // 4. Seřadíme rozházené hrany do plynulé polyline kontury
+    // 4. Order the scattered edges into a smooth polyline contour.
     auto stripper = vtkSmartPointer<vtkStripper>::New();
     stripper->SetInputConnection(edges->GetOutputPort());
-    // Nepoužijeme hned Update(), ale napojíme další filtr
 
-    // 5. Redukce počtu bodů (Decimace)
+    // 5. Decimate the polyline to reduce the number of points.
     auto decimator = vtkSmartPointer<vtkDecimatePolylineFilter>::New();
     decimator->SetInputConnection(stripper->GetOutputPort());
-    decimator->SetTargetReduction(0.90); // 90 % of points will be removed
+    decimator->SetTargetReduction(0.90);  // remove 90% of the points
     decimator->Update();
 
-    // Výstup si nyní vezmeme z decimátoru
     auto boundary = decimator->GetOutput();
     auto lines = boundary->GetLines();
-    
+
     if (lines->GetNumberOfCells() == 0) {
         return 0;
     }
 
-    // Procházíme nalezené kontury (může jich být více, pokud je úpon roztříštěný)
-    // Vybereme tu nejdelší, což je obvykle hlavní úponová oblast.
+    // Walk through the contours (there may be more than one if the
+    // attachment area is fragmented) and pick the longest one.
     vtkIdType max_points = 0;
     const vtkIdType* best_pts = nullptr;
     vtkIdType npts;
@@ -197,13 +200,13 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
     }
 
     if (max_points > 0 && best_pts != nullptr) {
-        // Kontrola duplicity prvního a posledního bodu (aby křivka nebyla explicitně uzavřená bodem navíc)
+        // Avoid a duplicate closing point (first == last).
         vtkIdType num_unique = max_points;
         if (max_points > 1 && best_pts[0] == best_pts[max_points - 1]) {
             num_unique = max_points - 1;
         }
 
-        // Naplnění výsledných uspořádaných bodů
+        // Store the ordered contour points.
         for (vtkIdType i = 0; i < num_unique; ++i) {
             double p[3];
             boundary->GetPoint(best_pts[i], p);

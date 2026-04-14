@@ -290,17 +290,24 @@ def _build_argparser() -> argparse.ArgumentParser:
         description="Clean binary NIfTI masks: binarize, filter components, morphological ops."
     )
 
-    # I/O
-    p.add_argument("--input-dir",  required=True,
-                   help="Folder containing input .nii / .nii.gz mask files.")
-    p.add_argument("--output-dir", default="",
-                   help="Output folder for cleaned masks (ignored with --inplace).")
-    p.add_argument("--labels", nargs="*", default=None,
-                   help="Mask names to clean (no extension). Omit to process all files.")
-    p.add_argument("--workers", type=int, default=4,
-                   help="Number of parallel worker processes (default: 4).")
-    p.add_argument("--inplace", action="store_true",
-                   help="Overwrite originals; a backup is created automatically.")
+    # I/O -- two modes: single-file or directory
+    single = p.add_argument_group("single-file mode")
+    single.add_argument("--input-file", default=None,
+                        help="Path to a single .nii / .nii.gz mask file.")
+    single.add_argument("--output-file", default=None,
+                        help="Output path for the cleaned mask (single-file mode).")
+
+    batch = p.add_argument_group("directory (batch) mode")
+    batch.add_argument("--input-dir", default=None,
+                       help="Folder containing input .nii / .nii.gz mask files.")
+    batch.add_argument("--output-dir", default="",
+                       help="Output folder for cleaned masks (ignored with --inplace).")
+    batch.add_argument("--labels", nargs="*", default=None,
+                       help="Mask names to clean (no extension). Omit to process all files.")
+    batch.add_argument("--workers", type=int, default=4,
+                       help="Number of parallel worker processes (default: 4).")
+    batch.add_argument("--inplace", action="store_true",
+                       help="Overwrite originals; a backup is created automatically.")
 
     # CleanConfig fields
     p.add_argument("--iso",        type=float, default=0.5,
@@ -337,6 +344,22 @@ def main() -> None:
         fill_holes=args.fill_holes,
         fully_connected=args.fully_connected,
     )
+
+    # Single-file mode: process one mask and exit.
+    if args.input_file:
+        in_path = Path(args.input_file)
+        if not in_path.exists():
+            raise SystemExit(f"Input file does not exist: {in_path}")
+        out_path = Path(args.output_file) if args.output_file else in_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        print_info(f"Cleaning single file: {in_path} -> {out_path}")
+        clean_mask_file(in_path, out_path, cfg)
+        print_success(f"Cleaned: {out_path.name}")
+        return
+
+    # Directory (batch) mode.
+    if not args.input_dir:
+        raise SystemExit("Provide either --input-file or --input-dir.")
 
     output_dir = Path(args.output_dir) if args.output_dir else Path(args.input_dir)
 

@@ -31,34 +31,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-# Ensure runner/ is on the path so ui.py can be imported regardless of CWD.
+# Ensure runner/ and src/python/ are on the path regardless of CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runner.ui import print_info, print_success, print_warning, print_error, print_step
+from muscle_names import MUSCLE_NAME_TO_STEM
 
 # ─────────────────────────────────────────────────────────────────
 # helpers
 # ─────────────────────────────────────────────────────────────────
-
-
-MUSCLE_MAPPING = {
-    "Iliacus": "iliacus",
-    "GluteusMaximus": "gluteus_maximus",
-    "GluteusMedius": "gluteus_medius",
-    "GluteusMinimus": "gluteus_minimus",
-    "Piriformis": "piriformis",
-    "BicepsFemoris": "biceps_femoris",
-    "Pectineus": "pectineus",
-    "AdductorMagnus": "adductor_magnus",
-    "AdductorBrevis": "adductor_brevis",
-    "RectusFemoris": "rectus_femoris",
-    "Psoas": "psoas_major",
-    "Sartorius": "sartorius",
-    "TensorFasciaLatae": "tensor_fasciae_latae",
-    "Gracilis": "gracilis",
-    "Semitendinosus": "semitendinosus",
-    "Semimembranosus": "semimembranosus",
-    "AdductorLongus": "adductor_longus",
-}
 
 def find_obj(directory: Path, name: str) -> Path | None:
     """Return the first .obj file whose stem matches *name* (case-insensitive),
@@ -68,7 +49,7 @@ def find_obj(directory: Path, name: str) -> Path | None:
         if candidate.exists():
             return candidate
             
-    prefix = MUSCLE_MAPPING.get(name)
+    prefix = MUSCLE_NAME_TO_STEM.get(name)
     if prefix:
         for side in ("_r", "_l"):
             candidate = directory / (prefix + side + ".obj")

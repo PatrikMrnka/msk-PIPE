@@ -1,3 +1,13 @@
+"""
+merge_meshes.py -- Mesh post-processing: merging, splitting, and copying.
+
+Post-processes meshes produced by the mask-to-mesh conversion step:
+  - Merges pelvis (hip_left + hip_right) into pelvis_no_sacrum.stl
+  - Splits tibia+fibula, patella, and phalanges_feet into left/right
+  - Copies femur_l.stl and femur_r.stl to the output folder
+  - Optionally merges all *_l + *_r pairs (--merge-lr-pairs flag)
+"""
+
 import os
 import sys
 import argparse
@@ -11,7 +21,7 @@ from runner.ui import print_info, print_success, print_warning, print_error, pri
 
 
 def merge_left_right_pairs(input_dir, output_dir, extensions=(".stl", ".obj")):
-    """Merge all *_l + *_r mesh pairs into a single mesh without side suffix.
+    """Merge all *_l + *_r mesh pairs into a single mesh without a side suffix.
 
     Example:
         iliacus_l.stl + iliacus_r.stl -> iliacus.stl
@@ -54,18 +64,16 @@ def merge_left_right_pairs(input_dir, output_dir, extensions=(".stl", ".obj")):
 
 
 def merge_meshes(input_files, output_file):
-    """Sloučí více STL souborů do jednoho.
+    """Merge multiple STL/OBJ files into a single mesh.
 
     Args:
-        input_files (list): Seznam cest k vstupním STL souborům.
-        output_file (str): Cesta k výstupnímu STL souboru.
+        input_files: List of paths to input mesh files.
+        output_file: Path to the output merged mesh file.
 
     Returns:
-        bool: True pokud bylo sloučení úspěšné, jinak False.
+        True if the merge succeeded, False otherwise.
     """
-
     missing = [p for p in input_files if not os.path.exists(p)]
-
     if missing:
         print_warning("Missing input files, skipping:")
         for m in missing:
@@ -98,23 +106,24 @@ def merge_meshes(input_files, output_file):
 
 
 def split_into_left_right_components(input_file, left_out, right_out):
-    """Rozdělí STL na komponenty a vytvoří samostatné výstupy pro levou/pravou stranu.
+    """Split a mesh into left and right components based on X-coordinate position.
 
-    Postup:
-    - Načte `input_file` do MeshSetu a provede dělení na souvislé komponenty
-      filtrem `generate_splitting_by_connected_components`.
-    - Odstraní původní "full" mesh (identifikován stejným počtem vrcholů jako původní, v rámci původního počtu meshů).
-    - Spočítá pro každou komponentu průměrnou X souřadnici a podle mediánu (středu rozsahu X) je rozdělí
-      na levou (X < mid) a pravou (X >= mid) stranu.
-    - Každou stranu uloží do dočasných STL a následně je sloučí pomocí `merge_meshes` do `left_out` a `right_out`.
+    Algorithm:
+      1. Load the input mesh and split it into connected components.
+      2. Remove the original (full) mesh from the candidate list.
+      3. Compute the mean X coordinate for each component and use the midpoint
+         of the X range to classify components as left (X < mid) or right
+         (X >= mid).
+      4. Save each side into temporary files and merge them into *left_out*
+         and *right_out*.
 
-    Parametry:
-        input_file (str | Path): Vstupní STL se sloučenými kostmi/částmi.
-        left_out (str | Path): Cílový STL pro levou stranu.
-        right_out (str | Path): Cílový STL pro pravou stranu.
+    Args:
+        input_file: Path to the input mesh containing merged bone parts.
+        left_out: Destination path for the left-side mesh.
+        right_out: Destination path for the right-side mesh.
 
-    Vrací:
-        bool: True, pokud byly generovány obě strany (ať už i prázdné sady komponent vrátí False), jinak False.
+    Returns:
+        True if both sides were generated successfully, False otherwise.
     """
     ms = pymeshlab.MeshSet()
     try:
@@ -124,7 +133,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
         print_error(f"Error loading '{input_file}': {e}")
         return False
 
-    # Zapamatuj si velikost původního meshe pro ignorování "full" kopie po splitu
+    # Remember the original mesh size so we can ignore the "full" copy after split.
     orig_vcount = ms.current_mesh().vertex_number()
     orig_mesh_count = ms.number_meshes()
 
@@ -137,14 +146,13 @@ def split_into_left_right_components(input_file, left_out, right_out):
         print_warning("Split produced no new components.")
         return False
 
-    # Sestav seznam indexů komponent a ignoruj původní 'full' mesh
+    # Build a list of component indices, ignoring the original full mesh.
     candidate_indices = []
     for i in range(total_count):
         ms.set_current_mesh(i)
         vnum = ms.current_mesh().vertex_number()
         if vnum == orig_vcount and i < orig_mesh_count:
-            # pravděpodobně původní nezpracovaný mesh – přeskočit
-            continue
+            continue  # likely the original unprocessed mesh
         candidate_indices.append(i)
 
     print_info(f"Found {len(candidate_indices)} components after filtering the original.")
@@ -153,7 +161,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
         print_warning("Not enough components to split into left/right.")
         return False
 
-    # Získej průměrné X každé komponenty
+    # Compute the mean X coordinate for each component.
     comps = []
     for i in candidate_indices:
         ms.set_current_mesh(i)
@@ -176,7 +184,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
     print_info(f"Left side (component indices): {left_ids}")
     print_info(f"Right side (component indices): {right_ids}")
 
-    # Ulož jednotlivé komponenty do dočasných souborů a sluč je po stranách
+    # Save individual components to temporary files, then merge per side.
     os.makedirs(os.path.dirname(left_out), exist_ok=True)
     tmp_dir = os.path.join(os.path.dirname(left_out), "_tmp_components")
     os.makedirs(tmp_dir, exist_ok=True)
@@ -199,7 +207,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
     ok_left = merge_meshes(left_files, left_out) if left_files else False
     ok_right = merge_meshes(right_files, right_out) if right_files else False
 
-    # Úklid dočasných komponent
+    # Clean up temporary component files.
     try:
         shutil.rmtree(tmp_dir)
     except Exception:
@@ -211,32 +219,26 @@ def split_into_left_right_components(input_file, left_out, right_out):
 def main():
     """CLI tool for mesh post-processing.
 
-    Post-processes meshes from mask2stl conversion:
-    - Merges pelvis (hip_left + hip_right) into pelvis_no_sacrum.stl
-    - Splits tibia+fibula, patella, and phalanges_feet into left/right components
-    - Copies femur_l.stl and femur_r.stl to output folder
-
-    Outputs are saved to the specified --output directory.
+    Post-processes meshes from mask-to-mesh conversion:
+      - Merges pelvis (hip_left + hip_right) into pelvis_no_sacrum.stl
+      - Splits tibia+fibula, patella, and phalanges_feet into left/right
+      - Copies femur_l.stl and femur_r.stl to the output folder
     """
     parser = argparse.ArgumentParser(
         description="Mesh post-processing for Snakemake pipeline."
     )
     parser.add_argument(
-        "--input-dir",
-        type=str,
-        required=True,
-        help="Input folder containing .stl files from mask2stl conversion",
+        "--input-dir", type=str, required=True,
+        help="Input folder containing .stl files from mask-to-mesh conversion",
     )
     parser.add_argument(
-        "--output-dir",
-        type=str,
-        required=True,
+        "--output-dir", type=str, required=True,
         help="Output folder for processed mesh files",
     )
     parser.add_argument(
-        "--merge-lr-pairs",
-        action="store_true",
-        help="Merge all *_l + *_r pairs to single meshes (e.g., iliacus_l + iliacus_r -> iliacus).",
+        "--merge-lr-pairs", action="store_true",
+        help="Merge all *_l + *_r pairs to single meshes "
+             "(e.g. iliacus_l + iliacus_r -> iliacus).",
     )
     args = parser.parse_args()
 
@@ -261,7 +263,7 @@ def main():
     else:
         print_warning("Skipping sacrum merge: sacrum.stl not found")
 
-    # 1) Pelvis: hip_left + hip_right -> pelvis_no_sacrum.stl (optional)
+    # 1) Pelvis: hip_left + hip_right -> pelvis_no_sacrum.stl
     hip_left = data_dir / "hip_left.stl"
     hip_right = data_dir / "hip_right.stl"
     if hip_left.exists() and hip_right.exists():
@@ -270,7 +272,7 @@ def main():
     else:
         print_warning("Skipping pelvis merge: missing hip_left.stl or hip_right.stl")
 
-    # 2) Tibia + Fibula -> tibia_l, tibia_r (optional)
+    # 2) Tibia + Fibula -> tibia_l, tibia_r
     tibia_all = data_dir / "tibia.stl"
     fibula_all = data_dir / "fibula.stl"
     if tibia_all.exists() and fibula_all.exists():
@@ -289,7 +291,7 @@ def main():
     else:
         print_warning("Skipping tibia/fibula split: missing tibia.stl or fibula.stl")
 
-    # 3) Patella -> patella_l, patella_r (optional)
+    # 3) Patella -> patella_l, patella_r
     patella_all = data_dir / "patella.stl"
     if patella_all.exists():
         temp_merged = result_dir / "patella_temp.stl"
@@ -307,7 +309,7 @@ def main():
     else:
         print_warning("Skipping patella split: patella.stl not found")
 
-    # 4) Phalanges_feet -> toes_l, toes_r (optional)
+    # 4) Phalanges_feet -> toes_l, toes_r
     phalanges_all = data_dir / "phalanges_feet.stl"
     if phalanges_all.exists():
         temp_merged = result_dir / "phalanges_feet_temp.stl"
@@ -325,7 +327,7 @@ def main():
     else:
         print_warning("Skipping phalanges split: phalanges_feet.stl not found")
 
-    # 5) Copy femur files to output directory (optional, may not exist)
+    # 5) Copy femur files to output directory.
     for bone in ["femur_l.stl", "femur_r.stl"]:
         src = data_dir / bone
         dst = result_dir / bone
