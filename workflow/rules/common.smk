@@ -7,7 +7,6 @@ import os
 import sys
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Directory layout
 # ---------------------------------------------------------------------------
@@ -31,9 +30,13 @@ OUT_DIR = os.path.join(BASE_OUT_DIR, RUN_ID)
 
 # Bone masks expected from TotalSegmentator (after internal renaming).
 BONE_MASKS = [
-    "hip_left", "hip_right", "sacrum",
-    "femur_l", "femur_r",
-    "tibia", "fibula",
+    "hip_left",
+    "hip_right",
+    "sacrum",
+    "femur_l",
+    "femur_r",
+    "tibia",
+    "fibula",
 ]
 
 # Muscle labels from config (keys of muscle_map.labels).
@@ -64,6 +67,7 @@ STAPLE_SIDELESS = {"pelvis_no_sacrum"}
 # Helper: resolve the Python executable inside a conda environment
 # ---------------------------------------------------------------------------
 
+
 def get_py_exe(env_name):
     """Return the path to the Python binary inside a named conda env."""
     exe = (
@@ -77,9 +81,7 @@ def get_py_exe(env_name):
 def totalseg_env_name():
     """Derive the conda env name from the totalseg YAML filename in config."""
     return (
-        config["snakemake_env"]["totalseg"]
-        .replace("env_", "msk_")
-        .replace(".yaml", "")
+        config["snakemake_env"]["totalseg"].replace("env_", "msk_").replace(".yaml", "")
     )
 
 

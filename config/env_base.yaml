@@ -11,7 +11,9 @@ dependencies:
   - nibabel
   - numpy
   - colorama
+  - simpleitk
   - pip
   - pip:
     - matlabengine==25.2.2
     - pymeshlab
+    - vtk # ODSTRANIT!!! POUZE TED

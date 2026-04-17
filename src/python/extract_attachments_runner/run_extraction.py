@@ -6,7 +6,7 @@ Orchestrates the C++ extract_attachments binary using a muscle-topology JSON.
 Groups tasks by bone so the locator is built ONCE per bone, then calls the
 binary with the new batch CLI:
 
-    extract_attachments <bone.obj> <threshold_mm> \\
+    extract_attachments <bone.obj> <threshold_mm> <clip_fraction> \\
         <muscle1.obj> <out1.vtk>  \\
         <muscle2.obj> <out2.vtk>  \\
         ...
@@ -19,6 +19,7 @@ Usage
         --topology  config/muscle_topology.json \\
         --out-dir   data/temp/attachments \\
         --threshold 3.0 \\
+        --clip-fraction 0.25 \\
         --cpp-bin   src/cpp/6_extract_attachments/build/Release/extract_attachments.exe
 """
 
@@ -86,6 +87,12 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Distance threshold in mm (default: 3.0).",
     )
     p.add_argument(
+        "--clip-fraction",
+        type=float,
+        default=0.25,
+        help="Fraction to keep at each muscle end before clipping the middle (default: 0.25).",
+    )
+    p.add_argument(
         "--cpp-bin", required=True, help="Path to compiled extract_attachments binary."
     )
     return p
@@ -117,6 +124,9 @@ def main() -> None:
         sys.exit(1)
     if not muscles_dir.is_dir():
         print_error(f"muscles directory not found: {muscles_dir}")
+        sys.exit(1)
+    if not (0.0 < args.clip_fraction < 0.5):
+        print_error(f"clip_fraction must be in (0, 0.5), got: {args.clip_fraction}")
         sys.exit(1)
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -167,8 +177,8 @@ def main() -> None:
             continue
 
         # Build the flat argument list:
-        # [cpp_bin] [bone.obj] [threshold] [m1.obj] [out1.vtk] [m2.obj] [out2.vtk] ...
-        cmd = [str(cpp_bin), str(bone_path), str(args.threshold)]
+        # [cpp_bin] [bone.obj] [threshold] [clip_fraction] [m1.obj] [out1.vtk] ...
+        cmd = [str(cpp_bin), str(bone_path), str(args.threshold), str(args.clip_fraction)]
         for muscle_path, out_vtk in pairs:
             cmd += [str(muscle_path), str(out_vtk)]
 

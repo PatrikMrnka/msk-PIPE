@@ -106,14 +106,14 @@ def _collect_run_settings(user_settings: dict) -> tuple[bool, str, bool]:
 
 # -- Report generation -----------------------------------------------------
 
-def _generate_report(cores: str, snakemake_env: dict[str, str]) -> None:
+def _generate_report(cores: str, run_id: str, snakemake_env: dict[str, str]) -> None:
     C.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = C.REPORTS_DIR / f"snakemake_report_{timestamp}.html"
 
     print_info(f"Generating Snakemake report -> {report_path}")
     subprocess.run(
-        [*_base_cmd(cores), "--report", str(report_path)],
+        [*_base_cmd(cores), "--config", f"run_id={run_id}", "--report", str(report_path)],
         env=snakemake_env, check=True,
     )
     print_success(f"Snakemake report saved: {report_path}")
@@ -152,11 +152,6 @@ def run_pipeline(user_settings: dict, config: dict) -> None:
     # pick it up without computing anything itself.
     cmd = [*_base_cmd(cores), "--config", f"run_id={run_id}"]
 
-    # If the user provided an explicit input path, forward it as well.
-    input_path = config.get("paths", {}).get("input_path", "")
-    if input_path:
-        cmd += ["--config", f'paths={{"input_path": "{input_path}"}}']
-
     popen_kwargs: dict = {}
     if __import__("platform").system() == "Windows":
         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -175,7 +170,7 @@ def run_pipeline(user_settings: dict, config: dict) -> None:
         print_success("Pipeline execution completed successfully!")
 
         if generate_report:
-            _generate_report(cores, snakemake_env)
+            _generate_report(cores, run_id, snakemake_env)
 
     except KeyboardInterrupt:
         print_interrupt("Ctrl-C detected. Terminating pipeline...")

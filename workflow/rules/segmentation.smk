@@ -8,26 +8,30 @@
 # rules use directory() outputs -- this is the correct abstraction for
 # tools whose output set is determined internally.
 
-
 # ---------------------------------------------------------------------------
 # Step 1: Bone segmentation (TotalSegmentator)
 # ---------------------------------------------------------------------------
+
 
 rule total_segmentator:
     input:
         nii=os.path.join(OUT_DIR, "image", "ct.nii.gz"),
     output:
-        seg_dir=directory(os.path.join(OUT_DIR, "bone_segmentations", "raw")),
+        masks=expand(
+            os.path.join(OUT_DIR, "bone_segmentations", "raw", "{bone}.nii.gz"),
+            bone=BONE_MASKS,
+        ),
     params:
         py_exe=lambda w: get_py_exe(totalseg_env_name()),
         device=config.get("totalsegmentator", {}).get("device", "cpu"),
         model=config.get("totalsegmentator", {}).get("model", "ct"),
         fast="--fast" if config.get("totalsegmentator", {}).get("fast", False) else "",
+        out_dir=os.path.join(OUT_DIR, "bone_segmentations", "raw"),
     shell:
         """
         "{params.py_exe}" src/python/bones_segmentation/run_totalsegmentator.py \
             {input.nii} \
-            --output-dir {output.seg_dir} \
+            --output-dir {params.out_dir} \
             --device {params.device} \
             --model {params.model} \
             {params.fast}
@@ -38,18 +42,23 @@ rule total_segmentator:
 # Step 2: Muscle segmentation (MuscleMap)
 # ---------------------------------------------------------------------------
 
+
 rule muscle_map:
     input:
         nii=os.path.join(OUT_DIR, "image", "ct.nii.gz"),
     output:
-        seg_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "raw")),
+        masks_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "raw")),
+        segmentation=os.path.join(
+            OUT_DIR, "muscle_segmentations", "raw", "musclemap_segmentation.nii.gz"
+        ),
     params:
         py_exe=lambda w: get_py_exe(musclemap_env_name()),
     shell:
         """
         "{params.py_exe}" src/python/muscles_segmentation_extraction/run_musclemap.py \
             {input.nii} \
-            --output-dir {output.seg_dir}
+            --output-dir {output.masks_dir} \
+            --chunk-size auto
         """
 
 
@@ -57,17 +66,66 @@ rule muscle_map:
 # Step 3: Extract individual muscle masks from multi-label segmentation
 # ---------------------------------------------------------------------------
 
+
 rule extract_muscle_masks:
     input:
-        seg_dir=os.path.join(OUT_DIR, "muscle_segmentations", "raw"),
+        segmentation=os.path.join(
+            OUT_DIR,
+            "muscle_segmentations",
+            "raw",
+            "musclemap_segmentation_bone_subtracted.nii.gz",
+        ),
     output:
-        seg_dir=directory(os.path.join(OUT_DIR, "muscle_segmentations", "extracted")),
+        masks=expand(
+            os.path.join(
+                OUT_DIR, "muscle_segmentations", "extracted", "{muscle}.nii.gz"
+            ),
+            muscle=MUSCLE_LABELS,
+        ),
     params:
         py_exe=lambda w: get_py_exe(musclemap_env_name()),
+        out_dir=os.path.join(OUT_DIR, "muscle_segmentations", "extracted"),
     shell:
         """
         "{params.py_exe}" src/python/muscles_segmentation_extraction/extract_muscle_masks.py \
-            {input.seg_dir}/musclemap_segmentation.nii.gz \
-            --output-dir {output.seg_dir} \
+            {input.segmentation} \
+            --output-dir {params.out_dir} \
             --config config/config.json
+        """
+
+
+# ---------------------------------------------------------------------------
+# Step 2b: Subtract combined raw bone masks from raw MuscleMap segmentation
+# ---------------------------------------------------------------------------
+
+
+rule subtract_bone_from_raw_muscle_segmentation:
+    input:
+        muscle_seg=os.path.join(
+            OUT_DIR, "muscle_segmentations", "raw", "musclemap_segmentation.nii.gz"
+        ),
+        bone_masks=expand(
+            os.path.join(OUT_DIR, "bone_segmentations", "raw", "{bone}.nii.gz"),
+            bone=BONE_MASKS,
+        ),
+    output:
+        muscle_seg=os.path.join(
+            OUT_DIR,
+            "muscle_segmentations",
+            "raw",
+            "musclemap_segmentation_bone_subtracted.nii.gz",
+        ),
+    params:
+        py_exe=lambda w: get_py_exe(totalseg_env_name()),
+        bone_dir=os.path.join(OUT_DIR, "bone_segmentations", "raw"),
+        dilation=config.get("muscle_preprocessing", {}).get(
+            "bone_subtraction_dilation_radius", 0
+        ),
+    shell:
+        """
+        "{params.py_exe}" src/python/subtract_bone_from_muscle.py \
+            --muscle-mask {input.muscle_seg} \
+            --bone-mask-dir {params.bone_dir} \
+            --output-mask {output.muscle_seg} \
+            --dilation-radius {params.dilation}
         """

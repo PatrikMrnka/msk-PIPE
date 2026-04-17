@@ -51,7 +51,7 @@ public:
     // For every muscle vertex within max_distance_mm of the bone
     // surface, the point is added to the internal result set.
     // Returns the number of attachment points found.
-    std::size_t extract(double max_distance_mm);
+    std::size_t extract(double max_distance_mm, double clip_fraction);
 
     // Export the collected attachment points to a legacy ASCII .vtk
     // file compatible with OpenSim MuscleGeneratorTool.

@@ -27,6 +27,18 @@
         "origin": "pelvis_no_sacrum",
         "insertion": "femur_r"
     },
+    "Piriformis": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "BicepsFemoris": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "Pectineus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
     "AdductorMagnus": {
         "origin": "pelvis_no_sacrum",
         "insertion": "femur_r"

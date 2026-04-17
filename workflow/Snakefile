@@ -5,23 +5,20 @@
 # and augmented at runtime by runner/pipeline.py (which passes run_id and
 # optional input_path via --config).
 
+
 configfile: "config/config.json"
+
 
 # Shared constants, helpers, and derived paths.
 include: "rules/common.smk"
-
 # Step 0: Input detection and normalisation (NIfTI / RAW / DICOM).
 include: "rules/input.smk"
-
 # Steps 1-3: Bone and muscle segmentation + muscle mask extraction.
 include: "rules/segmentation.smk"
-
 # Step 4: Per-file mask cleaning (bones and muscles).
 include: "rules/preprocessing.smk"
-
 # Steps 5-6: Mask-to-mesh conversion, STAPLE renaming, mesh merging.
 include: "rules/meshing.smk"
-
 # Steps 7-10: STAPLE modelling, attachment extraction, muscle wrapping.
 include: "rules/modeling.smk"
 
@@ -30,9 +27,13 @@ include: "rules/modeling.smk"
 # Final target: the complete pipeline output.
 # ---------------------------------------------------------------------------
 
+
 rule all:
     input:
         os.path.join(OUT_DIR, "bone_model.osim"),
         os.path.join(OUT_DIR, "muscle_models", ".done"),
         os.path.join(OUT_DIR, "setup_MuscleGeneratorTool.xml"),
-        os.path.join(OUT_DIR, "pipeline_model.osim"),
+        os.path.join(OUT_DIR, "pipeline_model.osim"),        
+        expand(os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"), muscle=MUSCLES),
+        expand(os.path.join(OUT_DIR, "VTK", "{bone}.vtk"), bone=BONE_MASKS)
+

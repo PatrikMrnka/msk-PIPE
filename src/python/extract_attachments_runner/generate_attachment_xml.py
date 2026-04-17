@@ -146,9 +146,7 @@ def extract_joint_transform(
 
         return translation, orientation
     except Exception as e:
-        print_warning(
-            f"Error parsing osim for joint '{joint_name}': {e}"
-        )
+        print_warning(f"Error parsing osim for joint '{joint_name}': {e}")
         return "", ""
 
 
@@ -193,6 +191,13 @@ def build_argparser() -> argparse.ArgumentParser:
         default=15,
         help="line_res per muscle generator (default: 15).",
     )
+    p.add_argument(
+        "--kinematics-algorithm",
+        type=str.lower,
+        default="havlicek",
+        choices=["havlicek", "luca"],
+        help="Kinematics fibre algorithm to write into XML (havlicek or luca).",
+    )
     return p
 
 
@@ -212,6 +217,7 @@ def build_xml(
     output_model: str,
     num_lines: int,
     line_res: int,
+    kinematics_algorithm: str,
 ) -> ET.Element:
 
     root = ET.Element("OpenSimDocument", Version="20302")
@@ -220,9 +226,8 @@ def build_xml(
     sub(tool, "model_file", osim_path.name)
     sub(tool, "motion_file", motion_file)
     sub(tool, "output_model_file", output_model)
-    # generate output_muscle_analysis_file_prefix as comment with <!-- -->
-    ET.Comment(" <output_muscle_analysis_file_prefix>./Experiments/</output_muscle_analysis_file_prefix> ")
-    # sub(tool, "output_muscle_analysis_file_prefix", "./Experiments/")
+    # ET.Comment(" <output_muscle_analysis_file_prefix>./Experiments/</output_muscle_analysis_file_prefix> ")
+    sub(tool, "output_muscle_analysis_file_prefix", "./Experiments/")
 
     gen_set = sub(tool, "MuscleGeneratorSet")
     objects = sub(gen_set, "objects")
@@ -308,7 +313,13 @@ def build_xml(
 
     sub(gen_set, "groups")
 
-    # ── Add XPBD / kinematics_fibre_algorithm block ──────────────
+    # ── Add kinematics_fibre_algorithm block (configurable) ─────
+    kfa = sub(tool, "kinematics_fibre_algorithm")
+
+    if kinematics_algorithm == "luca":
+        sub(kfa, "Luca2018viaPointsAlgorithm")
+        return root
+
     translation, orientation = extract_joint_transform(osim_path, "hip_r")
     if not translation or not orientation:
         print_warning("Could not extract joint transform from OSIM. Using defaults.")
@@ -324,7 +335,6 @@ def build_xml(
         if origin in ("pelvis", "femur_r") or insertion in ("pelvis", "femur_r"):
             muscles_involved.append(muscle_name)
 
-    kfa = sub(tool, "kinematics_fibre_algorithm")
     xpbd = sub(kfa, "Havlicek2024XPBDAlgorithm")
     jii_container = sub(xpbd, "joint_interaction_information")
 
@@ -349,6 +359,7 @@ def build_xml(
 
 def main() -> None:
     args = build_argparser().parse_args()
+    selected_algorithm = args.kinematics_algorithm.lower()
 
     osim_path = Path(args.osim).resolve()
     muscles_dir = Path(args.muscles).resolve()
@@ -396,15 +407,16 @@ def main() -> None:
         output_model=args.output_model,
         num_lines=args.num_lines,
         line_res=args.line_res,
+        kinematics_algorithm=selected_algorithm,
     )
 
     out_xml.parent.mkdir(parents=True, exist_ok=True)
+    (out_xml.parent / "Experiments").mkdir(parents=True, exist_ok=True)
 
     xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n' + indent_xml(root)
     out_xml.write_text(xml_str, encoding="utf-8")
 
     print_success(f"XML written to: {out_xml}")
-
 
 
 if __name__ == "__main__":

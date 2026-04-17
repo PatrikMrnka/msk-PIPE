@@ -17,32 +17,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from runner.ui import print_info, print_success, print_warning, print_error, print_step
 
 
-def run_musclemap(input_nifti: str, output_dir: str, spatial_overlap: int = 75, chunk_size: int = 15):
+def run_musclemap(
+    input_nifti: str, output_dir: str, spatial_overlap: int = 75, chunk_size: int = 15
+):
     """
     Run MuscleMap segmentation.
-    
+
     Args:
         input_nifti: Path to input NIfTI file (.nii.gz)
         output_dir: Output directory for masks
         spatial_overlap: Spatial overlap for sliding window inference (75-90)
     """
-    
+
     input_path = Path(input_nifti)
     if not input_path.exists():
         print_error(f"Input file not found: {input_nifti}")
         return False
-    
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Prefer invocation methods that do not depend on PATH activation.
     # This avoids WinError 2 when Snakemake runs Python directly from env.
-    
+
     print_step(f"Running MuscleMap segmentation on {input_nifti}")
     print_info(f"Spatial overlap: {spatial_overlap}%")
     print_info(f"Chunk size: {chunk_size} slices")
     print_info(f"Output directory: {output_dir}")
-    
+
     try:
         common_args = [
             "-i",
@@ -71,7 +73,12 @@ def run_musclemap(input_nifti: str, output_dir: str, spatial_overlap: int = 75, 
 
         # 3) Direct script fallback from local repository clone
         # .../src/python/02a_muscles_segm/2a_run_musclemap.py -> .../src/MuscleMap/scripts/mm_segment.py
-        mm_script = Path(__file__).resolve().parents[2] / "MuscleMap" / "scripts" / "mm_segment.py"
+        mm_script = (
+            Path(__file__).resolve().parents[2]
+            / "MuscleMap"
+            / "scripts"
+            / "mm_segment.py"
+        )
         if mm_script.exists():
             candidates.append([sys.executable, str(mm_script), *common_args])
 
@@ -90,7 +97,9 @@ def run_musclemap(input_nifti: str, output_dir: str, spatial_overlap: int = 75, 
             if result.returncode == 0:
                 success = True
                 break
-            print_warning(f"Command failed with return code {result.returncode}, trying fallback...")
+            print_warning(
+                f"Command failed with return code {result.returncode}, trying fallback..."
+            )
 
         if not success:
             print_error("All MuscleMap invocation methods failed.")
@@ -108,6 +117,7 @@ def run_musclemap(input_nifti: str, output_dir: str, spatial_overlap: int = 75, 
         preferred = output_path / f"{base}_dseg.nii.gz"
         fallback_local = input_path.parent / f"{base}_dseg.nii.gz"
         target_mask = output_path / "musclemap_segmentation.nii.gz"
+        target_mask_plural = output_path / "musclemap_segmentations.nii.gz"
 
         if preferred.exists():
             shutil.copy2(preferred, target_mask)
@@ -123,6 +133,10 @@ def run_musclemap(input_nifti: str, output_dir: str, spatial_overlap: int = 75, 
             else:
                 print_error("No segmentation output found.")
                 return False
+
+        # Keep a compatibility alias used by workflow rules.
+        shutil.copy2(target_mask, target_mask_plural)
+        print_success(f"Segmentation saved to {target_mask_plural}")
 
         print_success("MuscleMap segmentation completed successfully.")
         return True
@@ -159,20 +173,18 @@ def main():
     parser.add_argument(
         "--chunk-size",
         "-c",
-        type=int,
-        default=15,
-        help="Number of axial slices to process as a chunk (default: 15)",
+        type=str,
+        default="auto",
+        choices=["auto", 10, 15, 20],
+        help="Number of axial slices to process as a chunk (default: auto)",
     )
-    
+
     args = parser.parse_args()
-    
+
     success = run_musclemap(
-        args.input_nifti,
-        args.output_dir,
-        args.spatial_overlap,
-        args.chunk_size
+        args.input_nifti, args.output_dir, args.spatial_overlap, args.chunk_size
     )
-    
+
     sys.exit(0 if success else 1)
 
 

@@ -12,11 +12,12 @@
 static void print_usage(const char* prog) {
     std::cerr
         << "Usage:\n"
-        << "  " << prog << " <bone.obj> <threshold_mm>"
+    << "  " << prog << " <bone.obj> <threshold_mm> <clip_fraction>"
            " <muscle1.obj> <out1.vtk> [<muscle2.obj> <out2.vtk> ...]\n\n"
         << "Arguments:\n"
         << "  bone.obj       Bone mesh (.obj). Locator is built ONCE.\n"
         << "  threshold_mm   Max distance in mm for attachment detection (e.g. 3.0).\n"
+    << "  clip_fraction  Fraction kept at each muscle end before middle clipping (0, 0.5).\n"
         << "  muscleN.obj    Muscle mesh (.obj) – one or more pairs.\n"
         << "  outN.vtk       Output attachment point cloud (.vtk) for the paired muscle.\n";
 }
@@ -25,9 +26,9 @@ static void print_usage(const char* prog) {
 // main
 // ----------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    // Minimum: prog bone threshold muscle1 out1  => 5 args
-    // Pairs of (muscle, out) must be even after the first two positional args.
-    if (argc < 5 || (argc - 3) % 2 != 0) {
+    // Minimum: prog bone threshold clip_fraction muscle1 out1  => 6 args
+    // Pairs of (muscle, out) must be even after the first three positional args.
+    if (argc < 6 || (argc - 4) % 2 != 0) {
         print_usage(argv[0]);
         return EXIT_FAILURE;
     }
@@ -48,16 +49,32 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
+    // Parse clip fraction
+    double clip_fraction = 0.0;
+    try {
+        clip_fraction = std::stod(argv[3]);
+    } catch (const std::exception& e) {
+        std::cerr << "[error] invalid clip_fraction value '" << argv[3]
+                  << "': " << e.what() << "\n";
+        return EXIT_FAILURE;
+    }
+    if (clip_fraction <= 0.0 || clip_fraction >= 0.5) {
+        std::cerr << "[error] clip_fraction must be in (0, 0.5), got: "
+                  << clip_fraction << "\n";
+        return EXIT_FAILURE;
+    }
+
     // Collect (muscle, output) pairs from remaining arguments
     struct Pair { std::string muscle; std::string output; };
     std::vector<Pair> pairs;
-    for (int i = 3; i + 1 < argc; i += 2) {
+    for (int i = 4; i + 1 < argc; i += 2) {
         pairs.push_back({argv[i], argv[i + 1]});
     }
 
     std::cout << "=== extract_attachments ===\n"
               << "  bone:        " << bone_path << "\n"
               << "  threshold:   " << threshold_mm << " mm\n"
+              << "  clip:        " << clip_fraction << "\n"
               << "  muscles:     " << pairs.size() << "\n\n";
 
     // ── Load bone ONCE and build locator ──────────────────────────
@@ -79,7 +96,7 @@ int main(int argc, char* argv[]) {
         }
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        const auto count = extractor.extract(threshold_mm);
+        const auto count = extractor.extract(threshold_mm, clip_fraction);
         auto t1 = std::chrono::high_resolution_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 

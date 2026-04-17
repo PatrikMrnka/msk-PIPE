@@ -16,6 +16,8 @@
 #include <vtkStripper.h>
 #include <vtkCellArray.h>
 #include <vtkDecimatePolylineFilter.h>
+#include <vtkSplineFilter.h>
+#include <vtkBox.h>
 
 // ----------------------------------------------------------------
 // load_bone
@@ -106,7 +108,7 @@ bool AttachmentExtractor::load_muscle(const std::string& filepath) {
 //   locator query is O(1) amortised), instead of O(M * N) brute
 //   force.
 // ----------------------------------------------------------------
-std::size_t AttachmentExtractor::extract(double max_distance_mm) {
+std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fraction) {
     if (!bone_mesh_ || !muscle_mesh_) {
         std::cerr << "[error] both bone and muscle meshes must be loaded before extraction\n";
         return 0;
@@ -158,6 +160,53 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
         return 0;  // muscle is not within range of the bone
     }
 
+    // ====================================================================
+    // --- KROK 2.5: Odstranění střední části svalu (vyříznutí bříška) ---
+    // ====================================================================
+    
+    // Získáme absolutní rozměry celého svalu
+    double bounds[6];
+    muscle_mesh_->GetBounds(bounds); 
+    // bounds indexy: [xmin, xmax, ymin, ymax, zmin, zmax]
+    double z_min = bounds[4];
+    double z_max = bounds[5];
+    double z_range = z_max - z_min;
+
+    // Chceme zachovat clip_fraction nahoře a clip_fraction dole.
+    // Vše mezi tím (střed) vyřízneme.
+
+    // Vytvoříme virtuální 3D box, který reprezentuje střed svalu.
+    // Pro osy X a Y nastavíme obrovský přesah, abychom ořezávali čistě jen podle výšky Z.
+    double box_bounds[6];
+    box_bounds[0] = bounds[0] - 1000.0; 
+    box_bounds[1] = bounds[1] + 1000.0;
+    box_bounds[2] = bounds[2] - 1000.0; 
+    box_bounds[3] = bounds[3] + 1000.0;
+    box_bounds[4] = z_min + (clip_fraction * z_range); // Spodní hranice řezu
+    box_bounds[5] = z_max - (clip_fraction * z_range); // Horní hranice řezu
+
+    auto box = vtkSmartPointer<vtkBox>::New();
+    box->SetBounds(box_bounds);
+
+    auto box_clipper = vtkSmartPointer<vtkClipPolyData>::New();
+    box_clipper->SetInputData(attached_patch);
+    box_clipper->SetClipFunction(box);
+    
+    // vtkBox definuje prostor UVNITŘ jako záporné hodnoty.
+    // vtkClipPolyData standardně zachovává Kladné hodnoty (tj. to, co je VENKU z boxu).
+    // Výsledkem tedy budou jen ty části dotykové plochy, které leží nad nebo pod boxem.
+    box_clipper->InsideOutOff(); 
+    box_clipper->Update();
+
+    // Přepíšeme náš patch
+    attached_patch = box_clipper->GetOutput(); 
+
+    if (attached_patch->GetNumberOfPoints() == 0) {
+        std::cerr << "[warning] Po vyriznuti stredu svalu nezbyly zadne body uponu.\n";
+        return 0;
+    }
+    // ====================================================================
+
     // 3. Extract the boundary edges of the attachment patch.
     auto edges = vtkSmartPointer<vtkFeatureEdges>::New();
     edges->SetInputData(attached_patch);
@@ -167,25 +216,19 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
     edges->ManifoldEdgesOff();
     edges->Update();
 
-    // 4. Order the scattered edges into a smooth polyline contour.
+ // 4. Seřazení rozházených hran do plynulé kontury (polyline)
     auto stripper = vtkSmartPointer<vtkStripper>::New();
     stripper->SetInputConnection(edges->GetOutputPort());
+    stripper->Update();
 
-    // 5. Decimate the polyline to reduce the number of points.
-    auto decimator = vtkSmartPointer<vtkDecimatePolylineFilter>::New();
-    decimator->SetInputConnection(stripper->GetOutputPort());
-    decimator->SetTargetReduction(0.90);  // remove 90% of the points
-    decimator->Update();
-
-    auto boundary = decimator->GetOutput();
+    auto boundary = stripper->GetOutput();
     auto lines = boundary->GetLines();
 
     if (lines->GetNumberOfCells() == 0) {
         return 0;
     }
 
-    // Walk through the contours (there may be more than one if the
-    // attachment area is fragmented) and pick the longest one.
+    // 5. Nalezení nejdelší kontury (eliminace drobných artefaktů)
     vtkIdType max_points = 0;
     const vtkIdType* best_pts = nullptr;
     vtkIdType npts;
@@ -199,23 +242,43 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm) {
         }
     }
 
-    if (max_points > 0 && best_pts != nullptr) {
-        // Avoid a duplicate closing point (first == last).
-        vtkIdType num_unique = max_points;
-        if (max_points > 1 && best_pts[0] == best_pts[max_points - 1]) {
-            num_unique = max_points - 1;
-        }
+    if (max_points < 3 || best_pts == nullptr) {
+        return 0; // Příliš malá kontura
+    }
 
-        // Store the ordered contour points.
-        for (vtkIdType i = 0; i < num_unique; ++i) {
-            double p[3];
-            boundary->GetPoint(best_pts[i], p);
-            attachment_points_->InsertNextPoint(p);
-        }
+    // Vytvoření samostatného PolyData pouze s tou nejdelší linií
+    auto singleLine = vtkSmartPointer<vtkPolyData>::New();
+    singleLine->SetPoints(boundary->GetPoints());
+    auto cellArray = vtkSmartPointer<vtkCellArray>::New();
+    cellArray->InsertNextCell(max_points, best_pts);
+    singleLine->SetLines(cellArray);
+
+    // 6. Vyhlazení a ROVNOMĚRNÉ převzorkování kontury pomocí Spline filtru
+    // Místo decimace (která ničí rozestupy) vytvoříme plynulou křivku.
+    int desired_points = 50; // Počet bodů, které definují finální úpon (lze parametrizovat)
+    
+    auto splineFilter = vtkSmartPointer<vtkSplineFilter>::New();
+    splineFilter->SetInputData(singleLine);
+    splineFilter->SetSubdivideToSpecified();
+    splineFilter->SetNumberOfSubdivisions(desired_points);
+    splineFilter->Update();
+
+    auto smoothLine = splineFilter->GetOutput();
+    const vtkIdType num_smooth_points = smoothLine->GetNumberOfPoints();
+
+
+    for (vtkIdType i = 0; i < num_smooth_points; ++i) {
+        double pt[3], closest_point[3];
+        smoothLine->GetPoint(i, pt);
+        
+        // Použití již předpočítaného lokátoru kosti
+        locator_->FindClosestPoint(pt, closest_point, generic_cell, cell_id, sub_id, dist2);
+        
+        attachment_points_->InsertNextPoint(closest_point);
     }
 
     const auto count = static_cast<std::size_t>(attachment_points_->GetNumberOfPoints());
-    std::cout << "[info] extraction complete: ordered contour contains " << count << " points.\n";
+    std::cout << "[info] extraction complete: smooth contour projected with " << count << " points.\n";
 
     return count;
 }

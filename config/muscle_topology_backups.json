@@ -1,0 +1,18 @@
+{
+    "Iliacus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMaximus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMedius": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+    "GluteusMinimus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    }
+}

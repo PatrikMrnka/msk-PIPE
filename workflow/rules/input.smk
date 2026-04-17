@@ -13,7 +13,6 @@
 
 import shutil
 
-
 # ---------------------------------------------------------------------------
 # Input format detection
 # ---------------------------------------------------------------------------
@@ -34,7 +33,9 @@ if _explicit_input:
         elif _ext.endswith(".raw"):
             coords = list(_p.parent.glob("coordinates.txt"))
             if not coords:
-                sys.exit(f"[ERROR] RAW file found but coordinates.txt is missing for {_p}")
+                sys.exit(
+                    f"[ERROR] RAW file found but coordinates.txt is missing for {_p}"
+                )
             INPUT_TYPE = "raw"
             INPUT_FILES["raw"] = str(_p)
             INPUT_FILES["coords"] = str(coords[0])
@@ -69,12 +70,13 @@ if not INPUT_TYPE:
     if not INPUT_TYPE and INPUT_FORMAT in ("auto", "raw"):
         _raw = list(_in_dir.rglob("*.raw"))
         if _raw:
-            _coords = (
-                list(_raw[0].parent.glob("coordinates.txt"))
-                or list(_in_dir.rglob("coordinates.txt"))
+            _coords = list(_raw[0].parent.glob("coordinates.txt")) or list(
+                _in_dir.rglob("coordinates.txt")
             )
             if not _coords:
-                sys.exit(f"[ERROR] RAW file found but coordinates.txt is missing for {_raw[0]}")
+                sys.exit(
+                    f"[ERROR] RAW file found but coordinates.txt is missing for {_raw[0]}"
+                )
             INPUT_TYPE = "raw"
             INPUT_FILES["raw"] = str(_raw[0])
             INPUT_FILES["coords"] = str(_coords[0])
@@ -89,7 +91,9 @@ if not INPUT_TYPE:
             # DICOM files without an extension (exclude coordinates.txt)
             for _d in [_in_dir] + [s for s in _in_dir.iterdir() if s.is_dir()]:
                 _has_dicom = any(
-                    f.is_file() and f.suffix == "" and f.name.lower() != "coordinates.txt"
+                    f.is_file()
+                    and f.suffix == ""
+                    and f.name.lower() != "coordinates.txt"
                     for f in _d.iterdir()
                 )
                 if _has_dicom:
@@ -129,11 +133,11 @@ elif INPUT_TYPE == "raw":
             nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
         params:
             py_exe=get_py_exe("msk_base"),
-            dims=lambda w: (
-                config.get("raw_parameters", {})
-                .get(Path(INPUT_FILES["raw"]).name, {})
-                .get("dimensions", "512x512x120")
-            ),
+                dims=lambda w: (
+                    config.get("raw_parameters", {})
+                    .get(Path(INPUT_FILES["raw"]).name, {})
+                    .get("dimensions", "512x512x120")
+                )
         shell:
             """
             "{params.py_exe}" src/python/converting_formats/CT_raw_to_nifti.py \

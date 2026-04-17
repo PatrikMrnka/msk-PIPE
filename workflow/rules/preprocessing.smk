@@ -62,7 +62,9 @@ rule all_cleaned_bone_masks:
 
 rule clean_muscle_mask:
     input:
-        mask=os.path.join(OUT_DIR, "muscle_segmentations", "extracted", "{muscle}.nii.gz"),
+        mask=os.path.join(
+            OUT_DIR, "muscle_segmentations", "extracted", "{muscle}.nii.gz"
+        ),
     output:
         mask=os.path.join(OUT_DIR, "muscle_segmentations", "cleaned", "{muscle}.nii.gz"),
     params:
