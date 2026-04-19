@@ -2,10 +2,19 @@
     "user_settings": {
         "auto_run_pipeline": true,
         "generate_snakemake_report": true,
+        "generate_summary": true,
+        "generate_dag": true,
+        "generate_rulegraph": true,
+        "enable_benchmarking": true,
         "has_gpu": true,
         "input_format": "nifti",
         "skip_preflight_checks": true,
-        "snakemake_cores": "all"
+        "snakemake_cores": "all",
+        "snakemake_latency_wait": 30,
+        "muscle_segmentator": "musclemap"
+    },
+    "raw_input": {
+        "shape": "381x245x1120"
     },
     "paths": {
         "input_dir": "data/input",
@@ -39,7 +48,7 @@
         "passband": 0.01
     },
     "muscle_preprocessing": {
-        "min_voxels": 5000,
+        "min_voxels": 2000,
         "opening_kernel": 1,
         "closing_kernel": 1,
         "fill_holes": true,
@@ -47,12 +56,15 @@
         "bone_subtraction_dilation_radius": 0
     },
     "muscle_to_mesh": {
-        "smooth_iterations": 40,
-        "passband": 0.1
+        "smooth_iterations": 25,
+        "passband": 0.01
     },
     "attachment_extraction": {
+        "method": "atlas_registration",
+        "lhdl_bones_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\bones",
+        "lhdl_muscles_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\muscles",
         "threshold_mm": 4.0,
-        "clip_fraction": 0.25
+        "clip_fraction": 0.22
     },
     "muscle_wrapping": {
         "kinematics_algorithm": "luca"
@@ -63,7 +75,9 @@
             "gluteus_maximus_r": 6122,
             "gluteus_medius_r": 6112,
             "gluteus_minimus_r": 6102,
-            "iliacus_r": 6142
+            "iliacus_r": 6142,
+            "psoas_major_l": 5121,
+            "psoas_major_r": 5122
         }
     },
     "muscle_map": {
@@ -91,8 +105,6 @@
             "pectineus_r": 6192,
             "piriformis_l": 6181,
             "piriformis_r": 6182,
-            "psoas_major_l": 5121,
-            "psoas_major_r": 5122,
             "rectus_femoris_l": 7131,
             "rectus_femoris_r": 7132,
             "sartorius_l": 7141,
@@ -102,11 +114,21 @@
             "semitendinosus_l": 7171,
             "semitendinosus_r": 7172,
             "tensor_fasciae_latae_l": 6131,
-            "tensor_fasciae_latae_r": 6132
+            "tensor_fasciae_latae_r": 6132,
+            "obturator_internus_l": 6201,
+            "obturator_internus_r": 6202,
+            "obturator_externus_l": 6211,
+            "obturator_externus_r": 6212,
+            "vastus_lateralis_l": 7101,
+            "vastus_lateralis_r": 7102,
+            "vastus_medialis_l": 7121,
+            "vastus_medialis_r": 7122,
+            "vastus_intermedius_l": 7111,
+            "vastus_intermedius_r": 7112
         }
     },
     "env_file_hashes": {
-        "msk_base": "ae316b8a92963fd48eb4e136b20e2e0a5f7bb8ebc9c684dcac6707bc6d4a40bf",
+        "msk_base": "448f5fe0b18bcf6dba3f100ace90a3a817b3e79459b2ab2fe71dbc3a3c0eed01",
         "msk_totalseg_cpu": "c802bebc4368c3dcf43bb7696c32d92bc4525446b21c53c2be6645de1ace0aa4",
         "msk_totalseg_gpu": "e94ef527d425bf8026dab45e98cea5003200c6dacac4bfdd44e51024ee8a5045",
         "msk_musclemap_gpu": "955f2032a8f4c20ad6c52ae6651bd0dbb6f6e317945a00b8bfddb89788683557"

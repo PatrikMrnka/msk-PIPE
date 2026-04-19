@@ -1,82 +1,122 @@
 {
     "Iliacus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "iliacus_r",
+        "include_in_xml": true
     },
     "GluteusMaximus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "gluteus_maximus_r",
+        "include_in_xml": true
     },
     "GluteusMedius": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "gluteus_medius_r",
+        "include_in_xml": true
     },
     "GluteusMinimus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "gluteus_minimus_r",
+        "include_in_xml": true
     },
     "Piriformis": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "piriformis_r",
+        "include_in_xml": false
     },
     "BicepsFemoris": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "biceps_femoris_r",
+        "include_in_xml": false
     },
     "Pectineus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
-    },
-    "Piriformis": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
-    },
-    "BicepsFemoris": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
-    },
-    "Pectineus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "pectineus_r",
+        "include_in_xml": false
     },
     "AdductorMagnus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "adductor_magnus_r",
+        "include_in_xml": true
     },
     "AdductorBrevis": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
-    },
-    "RectusFemoris": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
-    },
-    "Psoas": {
-        "origin": "femur_r",
-        "insertion": "pelvis_no_sacrum"
-    },
-    "Sartorius": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "tibia_r"
-    },
-    "TensorFasciaLatae": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "tibia_r"
-    },
-    "Gracilis": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "tibia_r"
-    },
-    "Semitendinosus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "tibia_r"
-    },
-    "Semimembranosus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "tibia_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "adductor_brevis_r",
+        "include_in_xml": true
     },
     "AdductorLongus": {
-        "origin": "pelvis_no_sacrum",
-        "insertion": "femur_r"
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "adductor_longus_r",
+        "include_in_xml": true
+    },
+    "RectusFemoris": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "rectus_femoris_r",
+        "include_in_xml": false
+    },
+    "Sartorius": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "tibia_r",
+        "label": "sartorius_r",
+        "include_in_xml": false
+    },
+    "TensorFasciaeLatae": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "tibia_r",
+        "label": "tensor_fasciae_latae_r",
+        "include_in_xml": false
+    },
+    "Gracilis": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "tibia_r",
+        "label": "gracilis_r",
+        "include_in_xml": false
+    },
+    "Semitendinosus": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "tibia_r",
+        "label": "semitendinosus_r",
+        "include_in_xml": false
+    },
+    "Semimembranosus": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "tibia_r",
+        "label": "semimembranosus_r",
+        "include_in_xml": false
+    },
+    "VastusLateralis": {
+        "origin": "femur_r",
+        "insertion": "femur_r",
+        "label": "vastus_lateralis_r",
+        "include_in_xml": false
+    },
+    "VastusMedialis": {
+        "origin": "femur_r",
+        "insertion": "femur_r",
+        "label": "vastus_medialis_r",
+        "include_in_xml": false
+    },
+    "ObturatorExternus": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "obturator_externus_r",
+        "include_in_xml": false
+    },
+    "ObturatorInternus": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "obturator_internus_r",
+        "include_in_xml": false
     }
 }

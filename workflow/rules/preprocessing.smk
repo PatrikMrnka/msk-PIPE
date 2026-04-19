@@ -32,6 +32,8 @@ rule clean_bone_mask:
         min_v=config.get("bone_preprocessing", {}).get("min_voxels", 2000),
         open_k=config.get("bone_preprocessing", {}).get("opening_kernel", 1),
         clos_k=config.get("bone_preprocessing", {}).get("closing_kernel", 1),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "clean_bone_mask_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
         "{params.py_exe}" src/python/clean_masks.py \
@@ -60,11 +62,28 @@ rule all_cleaned_bone_masks:
 # Step 4b: Clean individual muscle masks
 # ---------------------------------------------------------------------------
 
+def _get_raw_muscle_mask_input(wildcards):
+    seg = config.get("user_settings", {}).get("muscle_segmentator", "musclemap")
+    if seg == "totalsegmentator":
+        name = wildcards.muscle
+        if name.endswith("_l"):
+            name = name[:-2] + "_left"
+        elif name.endswith("_r"):
+            name = name[:-2] + "_right"
+            
+        if "iliacus" in name:
+            name = name.replace("iliacus", "iliopsoas")
+
+        # Závisíme na checkpointu — Snakemake re-evaluuje DAG po jeho dokončení.
+        checkpoints.total_segmentator_muscle.get()
+        return os.path.join(OUT_DIR, "muscle_segmentations_totalsegmentator", "raw", f"{name}.nii.gz")
+    else:
+        checkpoints.extract_muscle_masks.get()
+        return os.path.join(OUT_DIR, "muscle_segmentations", "extracted", f"{wildcards.muscle}.nii.gz")
+
 rule clean_muscle_mask:
     input:
-        mask=os.path.join(
-            OUT_DIR, "muscle_segmentations", "extracted", "{muscle}.nii.gz"
-        ),
+        mask=_get_raw_muscle_mask_input,
     output:
         mask=os.path.join(OUT_DIR, "muscle_segmentations", "cleaned", "{muscle}.nii.gz"),
     params:
@@ -82,6 +101,8 @@ rule clean_muscle_mask:
             if config.get("muscle_preprocessing", {}).get("keep_largest", True)
             else "--no-keep-largest"
         ),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "clean_muscle_mask_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
         "{params.py_exe}" src/python/clean_masks.py \

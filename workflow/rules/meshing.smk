@@ -14,12 +14,14 @@ rule bone_mask_to_stl:
     input:
         mask=os.path.join(OUT_DIR, "bone_segmentations", "cleaned", "{bone}.nii.gz"),
     output:
-        mesh=os.path.join(OUT_DIR, "bone_models_raw", "{bone}.stl"),
+        mesh=os.path.join(OUT_DIR, "bone_models", "{bone}.stl"),
     params:
         cpp_bin=mask_to_mesh_bin(),
-        out_dir=os.path.join(OUT_DIR, "bone_models_raw"),
+        out_dir=os.path.join(OUT_DIR, "bone_models"),
         smooth=config.get("bone_to_mesh", {}).get("smooth_iterations", 30),
         passband=config.get("bone_to_mesh", {}).get("passband", 0.01),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "bone_mask_to_stl_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
         "{params.cpp_bin}" \
@@ -28,20 +30,6 @@ rule bone_mask_to_stl:
             --smooth_iters {params.smooth} \
             --passband {params.passband} \
             --format stl
-        """
-
-rule repair_bone_mesh:
-    input:
-        mesh=os.path.join(OUT_DIR, "bone_models_raw", "{bone}.stl"),
-    output:
-        mesh=os.path.join(OUT_DIR, "bone_models", "{bone}.stl"),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    shell:
-        """
-        "{params.py_exe}" src/python/repair_mesh.py \
-            --input-mesh {input.mesh} \
-            --output-mesh {output.mesh}
         """
 
 
@@ -64,12 +52,14 @@ rule muscle_mask_to_obj:
     input:
         mask=os.path.join(OUT_DIR, "muscle_segmentations", "cleaned", "{muscle}.nii.gz"),
     output:
-        mesh=os.path.join(OUT_DIR, "muscle_models_raw", "{muscle}.obj"),
+        mesh=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj"),
     params:
         cpp_bin=mask_to_mesh_bin(),
-        out_dir=os.path.join(OUT_DIR, "muscle_models_raw"),
+        out_dir=os.path.join(OUT_DIR, "muscle_models"),
         smooth=config.get("muscle_to_mesh", {}).get("smooth_iterations", 30),
         passband=config.get("muscle_to_mesh", {}).get("passband", 0.005),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "muscle_mask_to_obj_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
         "{params.cpp_bin}" \
@@ -78,20 +68,6 @@ rule muscle_mask_to_obj:
             --smooth_iters {params.smooth} \
             --passband {params.passband} \
             --format obj
-        """
-
-rule repair_muscle_mesh:
-    input:
-        mesh=os.path.join(OUT_DIR, "muscle_models_raw", "{muscle}.obj"),
-    output:
-        mesh=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj"),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    shell:
-        """
-        "{params.py_exe}" src/python/repair_mesh.py \
-            --input-mesh {input.mesh} \
-            --output-mesh {output.mesh}
         """
 
 
@@ -107,59 +83,84 @@ rule all_muscle_meshes:
 
 
 # ---------------------------------------------------------------------------
-# Step 6a: Rename bone STLs to STAPLE-compatible names
+# Step 6
 # ---------------------------------------------------------------------------
 
-rule rename_bones_for_staple:
+ruleorder: copy_femur_r_to_staple > split_meshes > merge_bone_meshes
+
+rule copy_femur_r_to_staple:
     input:
-        done=os.path.join(OUT_DIR, "bone_models", ".done"),
+        mesh=os.path.join(OUT_DIR, "bone_models", "femur_right.stl"),
     output:
-        renamed_dir=directory(os.path.join(OUT_DIR, "bone_models_renamed")),
+        mesh=os.path.join(BONE_STAPLE_DIR, "femur_r.stl"),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "copy_femur_r_to_staple.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+    run:
+        shutil.copy2(input.mesh, output.mesh)
+
+# ---------------------------------------------------------------------------
+# Mappings & Input Functions
+# ---------------------------------------------------------------------------
+
+# Slovník definující, z jakých souborů se skládají jednotlivé sloučené modely
+MERGE_SOURCES = {
+    "pelvis_no_sacrum": ["hip_left.stl", "hip_right.stl"],
+    "pelvis_with_sacrum": ["hip_left.stl", "hip_right.stl", "sacrum.stl"],
+    "tibia_fibula_temp": ["tibia.stl", "fibula.stl"]
+}
+
+def get_merge_inputs(wildcards):
+    """Dynamicky načte seznam vstupních meshů pro slučování."""
+    files = MERGE_SOURCES.get(wildcards.merged_bone, [])
+    # Use posix paths to avoid Snakemake matching errors on Windows
+    return [f"{OUT_DIR}/bone_models/{f}".replace("\\", "/") for f in files]
+
+def get_split_input(wildcards):
+    """Dynamicky určí vstupní soubor na základě jména kosti."""
+    if wildcards.bone == "tibia":
+        # Tibia se štípe ze sloučeného temp souboru
+        return os.path.join(BONE_STAPLE_DIR, "tibia_fibula_temp.stl").replace("\\", "/")
+    else:
+        # Ostatní (např. patella) se berou přímo z bone_models
+        return os.path.join(OUT_DIR, "bone_models", f"{wildcards.bone}.stl").replace("\\", "/")
+
+# ---------------------------------------------------------------------------
+# Rules
+# ---------------------------------------------------------------------------
+
+MERGE_BONE_PATTERN = "|".join(MERGE_SOURCES.keys())
+
+rule merge_bone_meshes:
+    input:
+        meshes=get_merge_inputs
+    output:
+        mesh=os.path.join(BONE_STAPLE_DIR, f"{{merged_bone,{MERGE_BONE_PATTERN}}}.{{ext,stl|obj}}")
     params:
         py_exe=get_py_exe("msk_base"),
-        models_dir=os.path.join(OUT_DIR, "bone_models"),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "merge_bone_meshes_{merged_bone}_{ext}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
-        "{params.py_exe}" src/python/rename_bones.py \
-            --input-dir  {params.models_dir} \
-            --output-dir {output.renamed_dir}
+        "{params.py_exe}" src/python/merge_mesh.py \
+            --input-meshes {input.meshes} \
+            --output-mesh {output.mesh}
         """
 
 
-# ---------------------------------------------------------------------------
-# Step 6b: Merge bone mesh pairs for STAPLE
-# ---------------------------------------------------------------------------
-
-rule merge_meshes:
+rule split_meshes:
     input:
-        models_dir=os.path.join(OUT_DIR, "bone_models_renamed"),
+        mesh=get_split_input
     output:
-        meshes_dir=directory(os.path.join(OUT_DIR, "bone_models_merged")),
+        left=os.path.join(BONE_STAPLE_DIR, "{bone}_l.stl"),
+        right=os.path.join(BONE_STAPLE_DIR, "{bone}_r.stl"),
     params:
         py_exe=get_py_exe("msk_base"),
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "split_meshes_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
-        "{params.py_exe}" src/python/merge_meshes.py \
-            --input-dir  {input.models_dir} \
-            --output-dir {output.meshes_dir}
-        """
-
-
-# ---------------------------------------------------------------------------
-# Step 6c: Repair merged bone meshes for STAPLE
-# ---------------------------------------------------------------------------
-
-rule repair_bone_meshes_merged:
-    input:
-        meshes_dir=os.path.join(OUT_DIR, "bone_models_merged"),
-    output:
-        repaired_dir=directory(os.path.join(OUT_DIR, "bone_models_merged_repaired")),
-        done=touch(os.path.join(OUT_DIR, "bone_models_merged_repaired", ".done")),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    shell:
-        """
-        "{params.py_exe}" src/python/repair_meshes_in_dir.py \
-            --input-dir {input.meshes_dir} \
-            --output-dir {output.repaired_dir}
+        "{params.py_exe}" src/python/split_mesh.py \
+            --input-mesh {input.mesh} \
+            --left-output {output.left} \
+            --right-output {output.right}
         """

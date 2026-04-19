@@ -53,7 +53,20 @@ if _explicit_input:
                 INPUT_TYPE = "nifti"
                 INPUT_FILES["nii"] = str(nii[0])
             else:
-                sys.exit(f"[ERROR] No recognisable input files in {_p}")
+                raw = list(_p.rglob("*.raw"))
+                if raw:
+                    coords = list(raw[0].parent.glob("coordinates.txt")) or list(
+                        _p.rglob("coordinates.txt")
+                    )
+                    if not coords:
+                        sys.exit(
+                            f"[ERROR] RAW file found but coordinates.txt is missing for {raw[0]}"
+                        )
+                    INPUT_TYPE = "raw"
+                    INPUT_FILES["raw"] = str(raw[0])
+                    INPUT_FILES["coords"] = str(coords[0])
+                else:
+                    sys.exit(f"[ERROR] No recognisable input files in {_p}")
 
 # Fall back to scanning IN_DIR when no explicit input was given.
 if not INPUT_TYPE:
@@ -107,6 +120,19 @@ if not INPUT_TYPE:
         "Use --input to specify a file or directory explicitly."
     )
 
+if INPUT_TYPE == "nifti":
+    IMAGE_NAME = Path(INPUT_FILES["nii"]).name
+elif INPUT_TYPE == "raw":
+    _target_name = Path(INPUT_FILES["raw"]).name.replace(".raw", ".nii.gz")
+    if _target_name == Path(INPUT_FILES["raw"]).name:
+        _target_name += ".nii.gz"
+    IMAGE_NAME = _target_name
+elif INPUT_TYPE == "dicom":
+    IMAGE_NAME = Path(INPUT_FILES["dicom_dir"]).name + ".nii.gz"
+else:
+    IMAGE_NAME = "ct.nii.gz"
+
+NII_OUT = os.path.join(OUT_DIR, "image", IMAGE_NAME)
 
 # ---------------------------------------------------------------------------
 # Step 0: prepare the normalised input image
@@ -118,7 +144,9 @@ if INPUT_TYPE == "nifti":
         input:
             nii=INPUT_FILES["nii"],
         output:
-            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+            nii=temp(NII_OUT),
+        benchmark:
+            os.path.join(OUT_DIR, "benchmarks", "prepare_input_nifti.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
         run:
             Path(output.nii).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(input.nii, output.nii)
@@ -130,18 +158,25 @@ elif INPUT_TYPE == "raw":
             raw=INPUT_FILES["raw"],
             coords=INPUT_FILES["coords"],
         output:
-            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+            nii=temp(NII_OUT),
         params:
             py_exe=get_py_exe("msk_base"),
-                dims=lambda w: (
-                    config.get("raw_parameters", {})
-                    .get(Path(INPUT_FILES["raw"]).name, {})
-                    .get("dimensions", "512x512x120")
+            extra=lambda w: (
+                "--shape " + _d
+                if (_d :=
+                    config.get("raw_input", {}).get("shape", "")
+                    or config.get("raw_parameters", {})
+                        .get(Path(INPUT_FILES["raw"]).name, {})
+                        .get("dimensions", "")
                 )
+                else ""
+            ),
+        benchmark:
+            os.path.join(OUT_DIR, "benchmarks", "prepare_input_raw.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
         shell:
             """
             "{params.py_exe}" src/python/converting_formats/CT_raw_to_nifti.py \
-                "{input.raw}" "{input.coords}" -o "{output.nii}" --shape {params.dims}
+                "{input.raw}" "{input.coords}" -o "{output.nii}" --allow-nonuniform {params.extra}
             """
 
 elif INPUT_TYPE == "dicom":
@@ -150,9 +185,11 @@ elif INPUT_TYPE == "dicom":
         input:
             dcm_dir=INPUT_FILES["dicom_dir"],
         output:
-            nii=temp(os.path.join(OUT_DIR, "image", "ct.nii.gz")),
+            nii=temp(NII_OUT),
         params:
             py_exe=get_py_exe("msk_base"),
+        benchmark:
+            os.path.join(OUT_DIR, "benchmarks", "prepare_input_dicom.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
         shell:
             """
             "{params.py_exe}" src/python/converting_formats/CT_dicom_to_nifti.py \

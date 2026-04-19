@@ -23,7 +23,14 @@ from rich.prompt import Confirm, Prompt
 from . import constants as C
 from .config_io import save_config
 from .system import terminate_process_tree
-from .ui import console, print_error, print_info, print_interrupt, print_launch, print_success
+from .ui import (
+    console,
+    print_error,
+    print_info,
+    print_interrupt,
+    print_launch,
+    print_success,
+)
 
 
 # -- Run ID computation ----------------------------------------------------
@@ -61,11 +68,13 @@ def determine_run_id(base_out_dir: str) -> str:
 
 # -- Snakemake command builder ---------------------------------------------
 
-def _base_cmd(cores: str) -> list[str]:
+def _base_cmd(cores: str, latency_wait: int) -> list[str]:
     env_base = str(Path("envs/msk_base").resolve())
     return [
         str(C.MICROMAMBA_EXE), "run", "-p", env_base,
         "snakemake", "--cores", str(cores),
+        "--resources", "segmentation_mutex=1",
+        "--latency-wait", str(latency_wait),
     ]
 
 
@@ -73,6 +82,21 @@ def _snakemake_env() -> dict[str, str]:
     env = os.environ.copy()
     env["CONDA_EXE"] = str(C.MICROMAMBA_EXE)
     return env
+
+
+def _dot_cmd() -> list[str]:
+    env_base = str(Path("envs/msk_base").resolve())
+    return [str(C.MICROMAMBA_EXE), "run", "-p", env_base, "dot"]
+
+
+def _dot_available(snakemake_env: dict[str, str]) -> bool:
+    result = subprocess.run(
+        [*_dot_cmd(), "-V"],
+        env=snakemake_env,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
 
 # -- Settings collection ---------------------------------------------------
@@ -93,6 +117,14 @@ def _collect_run_settings(user_settings: dict) -> tuple[bool, str, bool]:
             default="1",
         )
         user_settings["snakemake_cores"] = cores
+    
+    latency_wait: int = user_settings.get("snakemake_latency_wait", 30)
+    if not latency_wait:
+        latency_wait = Prompt.ask(
+            "How many seconds should Snakemake wait for files to appear? (default: 30)",
+            default="30",
+        )
+        user_settings["snakemake_latency_wait"] = int(latency_wait)
 
     generate_report = user_settings.get("generate_snakemake_report")
     if generate_report is None:
@@ -101,22 +133,53 @@ def _collect_run_settings(user_settings: dict) -> tuple[bool, str, bool]:
         )
         user_settings["generate_snakemake_report"] = bool(generate_report)
 
-    return bool(auto_run), str(cores), bool(generate_report)
+    return bool(auto_run), str(cores), int(latency_wait), bool(generate_report)
 
 
 # -- Report generation -----------------------------------------------------
 
-def _generate_report(cores: str, run_id: str, snakemake_env: dict[str, str]) -> None:
-    C.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = C.REPORTS_DIR / f"snakemake_report_{timestamp}.html"
+def _generate_analyses(cores: str, run_id: str, snakemake_env: dict[str, str], latency_wait: int, user_settings: dict) -> None:
+    run_reports_dir = C.REPORTS_DIR / run_id
+    run_reports_dir.mkdir(parents=True, exist_ok=True)
 
-    print_info(f"Generating Snakemake report -> {report_path}")
-    subprocess.run(
-        [*_base_cmd(cores), "--config", f"run_id={run_id}", "--report", str(report_path)],
-        env=snakemake_env, check=True,
-    )
-    print_success(f"Snakemake report saved: {report_path}")
+    base_cmd = [*_base_cmd(cores, latency_wait), "--config", f"run_id={run_id}"]
+
+    print_info(f"Ukládám reporty a analýzy do složky -> {run_reports_dir}")
+
+    # 1. Interaktivní HTML Report
+    if user_settings.get("generate_snakemake_report", True):
+        report_path = run_reports_dir / f"snakemake_report.html"
+        print_info(f"Generuji HTML report -> {report_path}")
+        subprocess.run([*base_cmd, "--report", str(report_path)], env=snakemake_env, check=True)
+
+    # 2. Detailní Summary
+    if user_settings.get("generate_summary", True):
+        summary_path = run_reports_dir / f"summary.txt"
+        print_info(f"Generuji detailní summary -> {summary_path}")
+        with open(summary_path, "w") as f:
+            subprocess.run([*base_cmd, "--summary"], env=snakemake_env, stdout=f)
+
+    # 3. Vizualizace (DAG a Rulegraph) - vyžaduje Graphviz (dot)
+    if user_settings.get("generate_dag", True) or user_settings.get("generate_rulegraph", True):
+        if not _dot_available(snakemake_env):
+            print_error("Nástroj Graphviz (příkaz 'dot') není nainstalován. Přeskakuji generování grafů.")
+        else:
+            if user_settings.get("generate_dag", True):
+                dag_path = run_reports_dir / f"dag.pdf"
+                print_info(f"Generuji DAG strom -> {dag_path}")
+                p1 = subprocess.Popen([*base_cmd, "--dag"], env=snakemake_env, stdout=subprocess.PIPE)
+                p2 = subprocess.Popen([*_dot_cmd(), "-Tpdf"], env=snakemake_env, stdin=p1.stdout, stdout=open(dag_path, "wb"))
+                p1.stdout.close()
+                p2.communicate()
+
+            if user_settings.get("generate_rulegraph", True):
+                rg_path = run_reports_dir / f"rulegraph.pdf"
+                print_info(f"Generuji Rulegraph -> {rg_path}")
+                p1 = subprocess.Popen([*base_cmd, "--rulegraph"], env=snakemake_env, stdout=subprocess.PIPE)
+                p2 = subprocess.Popen([*_dot_cmd(), "-Tpdf"], env=snakemake_env, stdin=p1.stdout, stdout=open(rg_path, "wb"))
+                p1.stdout.close()
+                p2.communicate()
+    
 
 
 # -- Public entry point ----------------------------------------------------
@@ -128,7 +191,7 @@ def run_pipeline(user_settings: dict, config: dict) -> None:
     never performs side-effects (directory creation, run numbering) during its
     parse phase.  The ID is passed to Snakemake via ``--config run_id=<value>``.
     """
-    auto_run, cores, generate_report = _collect_run_settings(user_settings)
+    auto_run, cores, latency_wait, generate_report = _collect_run_settings(user_settings)
 
     # Persist pipeline-related user settings into config.json immediately.
     config["user_settings"] = user_settings
@@ -144,13 +207,13 @@ def run_pipeline(user_settings: dict, config: dict) -> None:
     out_dir = Path(base_out_dir) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print_launch(f"Launching Snakemake (cores: {cores}, run: {run_id})...")
+    print_launch(f"Launching Snakemake (cores: {cores}, run: {run_id}, latency_wait: {latency_wait})...")
 
     snakemake_env = _snakemake_env()
 
     # Build the command with --config run_id=<value> so the Snakefile can
     # pick it up without computing anything itself.
-    cmd = [*_base_cmd(cores), "--config", f"run_id={run_id}"]
+    cmd = [*_base_cmd(cores, latency_wait), "--config", f"run_id={run_id}"]
 
     popen_kwargs: dict = {}
     if __import__("platform").system() == "Windows":
@@ -170,7 +233,7 @@ def run_pipeline(user_settings: dict, config: dict) -> None:
         print_success("Pipeline execution completed successfully!")
 
         if generate_report:
-            _generate_report(cores, run_id, snakemake_env)
+            _generate_analyses(cores, run_id, snakemake_env, latency_wait, user_settings)
 
     except KeyboardInterrupt:
         print_interrupt("Ctrl-C detected. Terminating pipeline...")

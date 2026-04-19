@@ -6,14 +6,28 @@ channels:
 dependencies:
   - python=3.12
   - snakemake
+  - psutil
+  - graphviz
   - rich
   - pydicom
   - nibabel
+  - pandas
+  - scikit-learn
   - numpy
+  - seaborn
+  - matplotlib
   - colorama
   - simpleitk
   - pip
+  - pyvista # lhdl mapping dependencies
+  - numpy
+  - scipy
+  - trimesh
   - pip:
+  # lhdl mapping dependencies (přesunuto z conda do pip)
+    - probreg
+    - pycpd
+    - open3d
     - matlabengine==25.2.2
     - pymeshlab
     - vtk # ODSTRANIT!!! POUZE TED

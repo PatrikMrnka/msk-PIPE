@@ -171,8 +171,9 @@ def main():
                     help="Path to the Z coordinates text file.")
     ap.add_argument("-o", "--out", type=pathlib.Path, default=None,
                     help="Output NIfTI path (e.g. out.nii.gz)")
-    ap.add_argument("--shape", type=str, default="381x245x1120",
-                    help="Dimensions as XxYxZ (default: 381x245x1120)")
+    ap.add_argument("--shape", type=str, default=None,
+                    help="Dimensions as XxYxZ (e.g. 381x245x1120). "
+                         "Optional: auto-detected from file size and coordinates if omitted.")
     ap.add_argument("--dtype", type=str, default="int16",
                     help="RAW data type (e.g. int16, uint16, float32). Default: int16")
     ap.add_argument("--little-endian", action="store_true", default=True,
@@ -194,11 +195,47 @@ def main():
                          "default transposes to (X,Y,Z) for NIfTI.")
     args = ap.parse_args()
 
-    # Parse dimensions.
-    try:
-        X, Y, Z = [int(v) for v in args.shape.lower().replace(" ", "").split("x")]
-    except Exception:
-        ap.error("--shape must be in the format XxYxZ, e.g. 381x245x1120.")
+    # Parse or auto-detect dimensions.
+    if args.shape is not None:
+        try:
+            X, Y, Z = [int(v) for v in args.shape.lower().replace(" ", "").split("x")]
+        except Exception:
+            ap.error("--shape must be in the format XxYxZ, e.g. 381x245x1120.")
+    else:
+        # Auto-detect Z from the coordinates file, then derive X*Y from file size.
+        # Try to parse XxYxZ from the filename first (e.g. LowerLimbCT_381x245x1120.raw).
+        import re as _re
+        _m = _re.search(r'(\d+)x(\d+)x(\d+)', args.raw_path.stem, _re.IGNORECASE)
+        if _m:
+            X, Y, Z = int(_m.group(1)), int(_m.group(2)), int(_m.group(3))
+            print_info(f"Auto-detected shape from filename: {X}x{Y}x{Z}")
+        else:
+            # Fall back: Z from coordinates file, X*Y from file size.
+            base_dtype_auto = np.dtype(args.dtype)
+            bytes_per_voxel = base_dtype_auto.itemsize
+            file_bytes = args.raw_path.stat().st_size
+            total_voxels = file_bytes // bytes_per_voxel
+            # Count non-empty lines in coordinates file to get Z.
+            with open(args.z_txt, "r", encoding="utf-8") as _f:
+                Z = sum(1 for _l in _f if _l.strip())
+            if Z == 0:
+                sys.exit("ERROR: coordinates file is empty, cannot auto-detect Z.")
+            xy_voxels = total_voxels // Z
+            if total_voxels % Z != 0:
+                sys.exit(
+                    f"ERROR: File size ({total_voxels} voxels) is not evenly divisible "
+                    f"by Z={Z} from coordinates file. Specify --shape explicitly."
+                )
+            # Assume square XY plane.
+            X_float = xy_voxels ** 0.5
+            X = round(X_float)
+            Y = xy_voxels // X
+            if X * Y != xy_voxels:
+                sys.exit(
+                    f"ERROR: Cannot factor {xy_voxels} XY voxels into a clean rectangle. "
+                    "Specify --shape explicitly (e.g. --shape 381x245x1120)."
+                )
+            print_info(f"Auto-detected shape from file size: {X}x{Y}x{Z}")
 
     # Data type with endianness.
     base_dtype = np.dtype(args.dtype)

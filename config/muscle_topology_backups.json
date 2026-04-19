@@ -14,5 +14,18 @@
     "GluteusMinimus": {
         "origin": "pelvis_no_sacrum",
         "insertion": "femur_r"
+    },
+    "Piriformis": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+        "AdductorMagnus": {
+        "origin": "pelvis_no_sacrum",
+        "insertion": "femur_r"
+    },
+        "BicepsFemoris": {
+        "origin": "pelvis_with_sacrum",
+        "insertion": "femur_r",
+        "label": "biceps_femoris_r"
     }
 }

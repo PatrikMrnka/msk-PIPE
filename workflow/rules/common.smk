@@ -4,6 +4,7 @@
 # to the symbols defined here because Snakemake `include` shares the namespace.
 
 import os
+import json
 import sys
 from pathlib import Path
 
@@ -22,7 +23,7 @@ STAPLE_PATH_DIR = config.get("paths", {}).get("staple_path", "src/STAPLE")
 # break --dry-run and cause inconsistencies after partial failures.
 RUN_ID = config.get("run_id", "run_1")
 OUT_DIR = os.path.join(BASE_OUT_DIR, RUN_ID)
-
+BONE_STAPLE_DIR = os.path.join(OUT_DIR, "bones_STAPLE")
 
 # ---------------------------------------------------------------------------
 # Known output labels
@@ -33,15 +34,38 @@ BONE_MASKS = [
     "hip_left",
     "hip_right",
     "sacrum",
-    "femur_l",
-    "femur_r",
+    "femur_left",
+    "femur_right",
     "tibia",
     "fibula",
 ]
 
-# Muscle labels from config (keys of muscle_map.labels).
-MUSCLE_LABELS = list(config.get("muscle_map", {}).get("labels", {}).keys())
+MUSCLE_MASKS_TOTALSEGMENTATOR = [
+    "gluteus_maximus_left",
+    "gluteus_maximus_right",
+    "gluteus_medius_left",
+    "gluteus_medius_right",
+    "gluteus_minimus_left",
+    "gluteus_minimus_right",
+    "iliopsoas_left",
+    "iliopsoas_right",
+]
 
+
+# Muscle topology and labels from config/muscle_topology.json.
+with open("config/muscle_topology.json", encoding="utf-8") as f:
+    TOPOLOGY = json.load(f)
+
+_seg_engine = config.get("user_settings", {}).get("muscle_segmentator", "musclemap")
+if _seg_engine == "totalsegmentator":
+    MUSCLE_LABELS = [
+        "gluteus_maximus_l", "gluteus_maximus_r",
+        "gluteus_medius_l", "gluteus_medius_r",
+        "gluteus_minimus_l", "gluteus_minimus_r",
+        "iliacus_l", "iliacus_r"
+    ]
+else:
+    MUSCLE_LABELS = list(config.get("muscle_map", {}).get("labels", {}).keys())
 
 # ---------------------------------------------------------------------------
 # STAPLE name mapping
@@ -106,3 +130,84 @@ def extract_attachments_bin():
     if os.name == "nt":
         return "src/cpp/extract_attachments/build/Release/extract_attachments.exe"
     return "src/cpp/extract_attachments/build/extract_attachments"
+
+# ---------- Benchmark PSS fix for Windows ----------
+import platform
+if platform.system() == "Windows":
+    try:
+        import snakemake.benchmark as _bm
+        _original_update = _bm.BenchmarkTimer._update_record
+
+        def _patched_update(self):
+            import psutil, time
+            from itertools import chain
+
+            rss, vms, uss, pss = 0, 0, 0, 0
+            io_in, io_out = 0, 0
+            check_io = True
+            cpu_usage = 0
+            cpu_time = 0
+            data_collected = False
+
+            try:
+                this_time = time.time()
+                for proc in chain((self.main,), self.main.children(recursive=True)):
+                    proc = self.procs.setdefault(proc.pid, proc)
+                    with proc.oneshot():
+                        if self.bench_record.prev_time:
+                            cpu_usage += proc.cpu_percent() * (
+                                this_time - self.bench_record.prev_time
+                            )
+                        try:
+                            meminfo = proc.memory_full_info()
+                        except psutil.Error:
+                            self.bench_record.skipped_procs.add((proc.pid, proc.name()))
+                            continue
+                        rss += meminfo.rss
+                        vms += meminfo.vms
+                        uss += meminfo.uss
+                        pss += getattr(meminfo, "pss", 0)  # <-- FIX
+                        if check_io:
+                            try:
+                                ioinfo = proc.io_counters()
+                                io_in += ioinfo.read_bytes
+                                io_out += ioinfo.write_bytes
+                            except NotImplementedError:
+                                check_io = False
+                        cpu_times = proc.cpu_times()
+                        self.bench_record.processed_procs[(proc.pid, proc.name())] = (
+                            cpu_times.user + cpu_times.system
+                        )
+                cpu_time = sum(self.bench_record.processed_procs.values())
+                self.bench_record.prev_time = this_time
+                if not self.bench_record.first_time:
+                    self.bench_record.prev_time = this_time
+                rss /= 1024 * 1024
+                vms /= 1024 * 1024
+                uss /= 1024 * 1024
+                pss /= 1024 * 1024
+                if check_io:
+                    io_in /= 1024 * 1024
+                    io_out /= 1024 * 1024
+                else:
+                    io_in = None
+                    io_out = None
+                data_collected = True
+            except (OSError, psutil.Error) as e:
+                self.bench_record.errors.append(str(e))
+                return
+
+            if data_collected:
+                self.bench_record.data_collected = True
+                self.bench_record.max_rss = max(self.bench_record.max_rss or 0, rss)
+                self.bench_record.max_vms = max(self.bench_record.max_vms or 0, vms)
+                self.bench_record.max_uss = max(self.bench_record.max_uss or 0, uss)
+                self.bench_record.max_pss = max(self.bench_record.max_pss or 0, pss)
+                self.bench_record.io_in = io_in
+                self.bench_record.io_out = io_out
+                self.bench_record.cpu_usage += cpu_usage
+                self.bench_record.cpu_time = cpu_time
+
+        _bm.BenchmarkTimer._update_record = _patched_update
+    except Exception:
+        pass

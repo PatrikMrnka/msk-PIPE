@@ -26,13 +26,11 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
-import shutil
 
 # Ensure runner/ and src/python/ are on the path regardless of CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from runner.ui import print_info, print_success, print_warning, print_error, print_step
-from muscle_names import MUSCLE_NAME_TO_STEM
+from runner.ui import print_success, print_warning, print_error, print_step
 
 # ─────────────────────────────────────────────────────────────────
 # helpers
@@ -51,7 +49,7 @@ def indent_xml(elem: ET.Element, level: int = 0) -> str:
     return "\n".join(lines)
 
 
-def sub(parent: ET.Element, tag: str, text: str = "", **attrib) -> ET.Element:
+def add_elem(parent: ET.Element, tag: str, text: str = "", **attrib) -> ET.Element:    
     """Create a sub-element with optional text and attributes."""
     el = ET.SubElement(parent, tag, **attrib)
     if text:
@@ -66,7 +64,12 @@ def relative_to_xml(xml_dir: Path, target: Path) -> str:
 
 def normalize_body_name(body_name: str) -> str:
     """Map internal bone names to the names expected in the XML."""
-    return "pelvis" if body_name == "pelvis_no_sacrum" else body_name
+    return "pelvis" if body_name == "pelvis_with_sacrum" else body_name
+
+
+def muscle_mesh_stem(muscle_name: str, roles: dict[str, str]) -> str:
+    """Return the mesh stem declared in the topology JSON."""
+    return roles.get("label", muscle_name)
 
 
 def extract_joint_transform(
@@ -221,46 +224,53 @@ def build_xml(
 ) -> ET.Element:
 
     root = ET.Element("OpenSimDocument", Version="20302")
-    tool = sub(root, "MuscleGeneratorTool", name="pipeline_MGT")
+    tool = add_elem(root, "MuscleGeneratorTool", name="pipeline_MGT")
 
-    sub(tool, "model_file", osim_path.name)
-    sub(tool, "motion_file", motion_file)
-    sub(tool, "output_model_file", output_model)
+    add_elem(tool, "model_file", osim_path.name)
+    add_elem(tool, "motion_file", motion_file)
+    add_elem(tool, "output_model_file", output_model)
     # ET.Comment(" <output_muscle_analysis_file_prefix>./Experiments/</output_muscle_analysis_file_prefix> ")
-    sub(tool, "output_muscle_analysis_file_prefix", "./Experiments/")
+    add_elem(tool, "output_muscle_analysis_file_prefix", "./Experiments/")
 
-    gen_set = sub(tool, "MuscleGeneratorSet")
-    objects = sub(gen_set, "objects")
+    gen_set = add_elem(tool, "MuscleGeneratorSet")
+    objects = add_elem(gen_set, "objects")
 
     added_muscles = set()
 
     for muscle_name, roles in topology.items():
+        if not roles.get("include_in_xml", True):
+            print_warning(f"Skipping {muscle_name} due to 'include_in_xml' flag in topology.")
+            continue
+
         origin_bone = normalize_body_name(roles.get("origin", ""))
         insertion_bone = normalize_body_name(roles.get("insertion", ""))
+        mesh_stem = muscle_mesh_stem(muscle_name, roles)
 
         # Locate the muscle mesh .obj (filename may vary -- try stem match)
         muscle_obj = None
         for ext in (".obj", ".OBJ"):
-            candidate = muscles_dir / (muscle_name + ext)
+            candidate = muscles_dir / (mesh_stem + ext)
             if candidate.exists():
                 muscle_obj = candidate
                 break
 
         if muscle_obj is None:
-            prefix = MUSCLE_NAME_TO_STEM.get(muscle_name)
-            if prefix:
-                for side in ("_r", "_l"):
-                    candidate = muscles_dir / (prefix + side + ".obj")
-                    if candidate.exists():
-                        muscle_obj = candidate
-                        break
+            for side in ("_r", "_l"):
+                candidate = muscles_dir / (mesh_stem + side + ".obj")
+                if candidate.exists():
+                    muscle_obj = candidate
+                    break
 
         if muscle_obj is None:
             # Try a looser match (first file containing muscle_name)
             for f in muscles_dir.glob("*.obj"):
-                if muscle_name.lower() in f.stem.lower():
+                if mesh_stem.lower() in f.stem.lower() or muscle_name.lower() in f.stem.lower():
                     muscle_obj = f
                     break
+        
+        if muscle_obj is None:
+            print_warning(f"Missing muscle mesh OBJ for {muscle_name}. Skipping XML entry.")
+            continue
 
         # Locate the VTK files
         ori_vtk = vtks_dir / f"{muscle_name}_Ori.vtk"
@@ -275,49 +285,46 @@ def build_xml(
         added_muscles.add(muscle_name)
 
         # ── MuscleGenerator block ─────────────────────────────────
-        mg = sub(objects, "MuscleGenerator", name=muscle_name)
+        mg = add_elem(objects, "MuscleGenerator", name=muscle_name)
 
-        geom = sub(mg, "MuscleGeometry")
-        sub(geom, "body", origin_bone)
+        geom = add_elem(mg, "MuscleGeometry")
+        add_elem(geom, "body", origin_bone)
 
-        mesh_el = sub(geom, "Mesh", name=muscle_name)
-        sub(mesh_el, "scale_factors", "0.001 0.001 0.001")
-        if muscle_obj:
-            mesh_file_name = relative_to_xml(out_xml_dir, muscle_obj)
-        else:
-            mesh_file_name = f"{muscle_name}.obj"
-        sub(mesh_el, "mesh_file", mesh_file_name)
+        mesh_el = add_elem(geom, "Mesh", name=muscle_name)
+        add_elem(mesh_el, "scale_factors", "0.001 0.001 0.001")
+        mesh_file_name = relative_to_xml(out_xml_dir, muscle_obj)
+        add_elem(mesh_el, "mesh_file", mesh_file_name)
 
         # Attachment areas
-        areas = sub(geom, "attachment_areas")
+        areas = add_elem(geom, "attachment_areas")
 
         # Origin
-        ori_area = sub(areas, "AttachmentArea", name=f"origin {origin_bone}")
-        sub(ori_area, "type", "origin")
-        sub(ori_area, "body", origin_bone)
-        sub(ori_area, "point_file", relative_to_xml(out_xml_dir, ori_vtk))
-        sub(ori_area, "scale_factors", "0.001 0.001 0.001")
+        ori_area = add_elem(areas, "AttachmentArea", name=f"origin {origin_bone}")
+        add_elem(ori_area, "type", "origin")
+        add_elem(ori_area, "body", origin_bone)
+        add_elem(ori_area, "point_file", relative_to_xml(out_xml_dir, ori_vtk))
+        add_elem(ori_area, "scale_factors", "0.001 0.001 0.001")
 
         # Insertion
-        ins_area = sub(areas, "AttachmentArea", name=f"insertion {insertion_bone}")
-        sub(ins_area, "type", "insertion")
-        sub(ins_area, "body", insertion_bone)
-        sub(ins_area, "point_file", relative_to_xml(out_xml_dir, ins_vtk))
-        sub(ins_area, "scale_factors", "0.001 0.001 0.001")
+        ins_area = add_elem(areas, "AttachmentArea", name=f"insertion {insertion_bone}")
+        add_elem(ins_area, "type", "insertion")
+        add_elem(ins_area, "body", insertion_bone)
+        add_elem(ins_area, "point_file", relative_to_xml(out_xml_dir, ins_vtk))
+        add_elem(ins_area, "scale_factors", "0.001 0.001 0.001")
 
         # Fibre parameters
-        sub(mg, "fiber_template", " parallel ")
-        sub(mg, "fiber_arrangement", " uniform ")
-        sub(mg, "num_of_lines", f" {num_lines} ")
-        sub(mg, "line_res", f" {line_res} ")
+        add_elem(mg, "fiber_template", " parallel ")
+        add_elem(mg, "fiber_arrangement", " uniform ")
+        add_elem(mg, "num_of_lines", f" {num_lines} ")
+        add_elem(mg, "line_res", f" {line_res} ")
 
-    sub(gen_set, "groups")
+    add_elem(gen_set, "groups")
 
     # ── Add kinematics_fibre_algorithm block (configurable) ─────
-    kfa = sub(tool, "kinematics_fibre_algorithm")
+    kfa = add_elem(tool, "kinematics_fibre_algorithm")
 
     if kinematics_algorithm == "luca":
-        sub(kfa, "Luca2018viaPointsAlgorithm")
+        add_elem(kfa, "Luca2018viaPointsAlgorithm")
         return root
 
     translation, orientation = extract_joint_transform(osim_path, "hip_r")
@@ -335,19 +342,19 @@ def build_xml(
         if origin in ("pelvis", "femur_r") or insertion in ("pelvis", "femur_r"):
             muscles_involved.append(muscle_name)
 
-    xpbd = sub(kfa, "Havlicek2024XPBDAlgorithm")
-    jii_container = sub(xpbd, "joint_interaction_information")
+    xpbd = add_elem(kfa, "Havlicek2024XPBDAlgorithm")
+    jii_container = add_elem(xpbd, "joint_interaction_information")
 
-    jii = sub(jii_container, "JointInteractionInformation", name="hip_r")
-    sub(jii, "body", "femur_r")
-    sub(jii, "centre", translation)
-    sub(jii, "orientation", orientation)
-    sub(jii, "scale_factors", "0.001 0.001 0.001")
+    jii = add_elem(jii_container, "JointInteractionInformation", name="hip_r")
+    add_elem(jii, "body", "femur_r")
+    add_elem(jii, "centre", translation)
+    add_elem(jii, "orientation", orientation)
+    add_elem(jii, "scale_factors", "0.001 0.001 0.001")
 
     # Adding a trailing space to match the string in the example
-    sub(jii, "muscles_involved", " ".join(muscles_involved) + " ")
+    add_elem(jii, "muscles_involved", " ".join(muscles_involved) + " ")
 
-    sub(jii, "muscle_activations_file", muscle_activations_file)
+    add_elem(jii, "muscle_activations_file", muscle_activations_file)
 
     return root
 

@@ -163,7 +163,7 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     // ====================================================================
     // --- KROK 2.5: Odstranění střední části svalu (vyříznutí bříška) ---
     // ====================================================================
-    
+    // Z - osa
     // Získáme absolutní rozměry celého svalu
     double bounds[6];
     muscle_mesh_->GetBounds(bounds); 
@@ -255,7 +255,7 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
 
     // 6. Vyhlazení a ROVNOMĚRNÉ převzorkování kontury pomocí Spline filtru
     // Místo decimace (která ničí rozestupy) vytvoříme plynulou křivku.
-    int desired_points = 50; // Počet bodů, které definují finální úpon (lze parametrizovat)
+    int desired_points = 30; // Počet bodů, které definují finální úpon (lze parametrizovat)
     
     auto splineFilter = vtkSmartPointer<vtkSplineFilter>::New();
     splineFilter->SetInputData(singleLine);

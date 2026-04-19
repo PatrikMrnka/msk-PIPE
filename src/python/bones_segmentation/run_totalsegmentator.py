@@ -16,6 +16,7 @@ def run_totalsegmentator(
     device: str,
     fast: bool,
     model: str,
+    roi_subset: list[str] | None = None,
 ) -> None:
     in_path = input_nii.resolve()
     if not in_path.exists():
@@ -25,15 +26,18 @@ def run_totalsegmentator(
     out_dir = output_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    requested = [
-        "hip_left",
-        "hip_right",
-        "sacrum",
-        "femur_left",
-        "femur_right",
-        "tibia",
-        "fibula"
-    ]
+    if roi_subset:
+        requested = roi_subset
+    else:
+        requested = [
+            "hip_left",
+            "hip_right",
+            "sacrum",
+            "femur_left",
+            "femur_right",
+            "tibia",
+            "fibula"
+        ]
 
     if model == "mr":
         rois_total = [r for r in requested if r in class_map["total_mr"].values()]
@@ -41,13 +45,23 @@ def run_totalsegmentator(
             r for r in requested if r in class_map["appendicular_bones_mr"].values()
         ]
         appendicular_map_key = "appendicular_bones_mr"
+        
+        # Přidáme proměnné pro názvy tasků
+        task_total = "total_mr"
+        task_append = "appendicular_bones_mr"
+        
         print_info("Using MR model.")
-    else:
+    elif model =="ct":
         rois_total = [r for r in requested if r in class_map["total"].values()]
         rois_append = [
             r for r in requested if r in class_map["appendicular_bones"].values()
         ]
         appendicular_map_key = "appendicular_bones"
+        
+        # Proměnné pro CT tasky
+        task_total = "total"
+        task_append = "appendicular_bones"
+        
         print_info("Using CT model.")
 
     print_info(f"Input: {in_path}")
@@ -59,17 +73,17 @@ def run_totalsegmentator(
         totalsegmentator(
             input=str(in_path),
             output=str(out_dir),
-            task="total",
-            roi_subset=rois_total,
+            task=task_total,
             fast=bool(fast),
             device=device,
+            roi_subset=rois_total,
         )
 
     if rois_append:
         totalsegmentator(
             input=str(in_path),
             output=str(out_dir),
-            task="appendicular_bones",
+            task=task_append, # Dynamická proměnná
             fast=bool(fast),
             device=device,
         )
@@ -82,17 +96,6 @@ def run_totalsegmentator(
                     p.unlink()
                 except OSError:
                     pass
-
-    # Normalize naming expected by the downstream steps.
-    rename = {"femur_left": "femur_l", "femur_right": "femur_r"}
-    for old_name, new_name in rename.items():
-        old_path = out_dir / f"{old_name}.nii.gz"
-        new_path = out_dir / f"{new_name}.nii.gz"
-        if old_path.exists() and not new_path.exists():
-            try:
-                old_path.rename(new_path)
-            except OSError:
-                pass
 
     print_success("TotalSegmentator step finished.")
 
@@ -107,7 +110,8 @@ def build_argparser() -> argparse.ArgumentParser:
     )
     p.add_argument("--device", choices=["cpu", "gpu"], default="cpu")
     p.add_argument("--fast", action="store_true")
-    p.add_argument("--model", choices=["mr", "ct"], required=True)
+    p.add_argument("--model", choices=["mr", "ct", "muscle"], required=True)
+    p.add_argument("--roi-subset", nargs="+", help="Space-separated list of ROIs to segment", default=None)
     return p
 
 
@@ -119,6 +123,7 @@ def main() -> None:
         device=args.device,
         fast=bool(args.fast),
         model=args.model,
+        roi_subset=args.roi_subset,
     )
 
 
