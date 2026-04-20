@@ -55,6 +55,13 @@ python -m runner [--input <file_or_dir>]
 | **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
 | **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
 
+### STAPLE Pre-flight Automation
+
+- During pre-flight, STAPLE is searched in `src/STAPLE` and then in `STAPLE_PATH`.
+- If STAPLE is not found, the runner offers automatic download from GitHub into `src/STAPLE`.
+- After STAPLE is detected or downloaded, pre-flight automatically applies a MATLAB R2023a+ compatibility patch in `GIBOC-core/SubFunctions/GeometricFun/PCRegionGrowing.m` (replaces `size(idx)` with `length(idx)` in `Pts_Out(...)`) when needed.
+- The patch step is idempotent and is skipped if the fix is already present.
+
 ### Python Libraries (env_base)
 
 Key dependencies managed via `config/env_base.yaml`:

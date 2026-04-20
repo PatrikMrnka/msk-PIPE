@@ -60,14 +60,14 @@
         "passband": 0.01
     },
     "attachment_extraction": {
-        "method": "user_provided",
+        "method": "atlas_registration",
         "lhdl_bones_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\bones",
         "lhdl_muscles_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\muscles",
         "threshold_mm": 4.0,
         "clip_fraction": 0.22
     },
     "muscle_wrapping": {
-        "kinematics_algorithm": "luca"
+        "kinematics_algorithm": "havlicek"
     },
     "muscle_map_backup": {
         "default_model": "default",
@@ -128,7 +128,7 @@
         }
     },
     "env_file_hashes": {
-        "msk_base": "448f5fe0b18bcf6dba3f100ace90a3a817b3e79459b2ab2fe71dbc3a3c0eed01",
+        "msk_base": "9f8ae4b981388e5fdc14c016c9f32f4cb8c1099952e5faaa847494e102c52f37",
         "msk_totalseg_cpu": "c802bebc4368c3dcf43bb7696c32d92bc4525446b21c53c2be6645de1ace0aa4",
         "msk_totalseg_gpu": "e94ef527d425bf8026dab45e98cea5003200c6dacac4bfdd44e51024ee8a5045",
         "msk_musclemap_gpu": "955f2032a8f4c20ad6c52ae6651bd0dbb6f6e317945a00b8bfddb89788683557"

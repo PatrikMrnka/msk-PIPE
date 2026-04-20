@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -77,6 +78,60 @@ def check_muscle_wrapping(paths: dict) -> str | None:
 # ── MSK-STAPLE ────────────────────────────────────────────────────────────────
 
 
+_STAPLE_PCREGIONGROWING_REL = (
+    Path("GIBOC-core")
+    / "SubFunctions"
+    / "GeometricFun"
+    / "PCRegionGrowing.m"
+)
+_STAPLE_OLD_COLON_EXPR = re.compile(
+    r"Pts_Out\(end\+1:end\+size\(idx\),:\)\s*=\s*Pts\(idx,:\);"
+)
+
+
+def _apply_staple_colon_fix(staple_root: Path) -> bool:
+    """
+    Patch MSK-STAPLE for MATLAB R2023a+ compatibility.
+
+    Newer MATLAB versions require scalar operands for the colon operator.
+    Older STAPLE versions use ``size(idx)`` (1x2 vector) in PCRegionGrowing,
+    which crashes during femoral condyle extraction.
+    """
+    pc_region_growing = staple_root / _STAPLE_PCREGIONGROWING_REL
+
+    if not pc_region_growing.is_file():
+        print_warning(
+            f"{pc_region_growing} not found. Skipping STAPLE MATLAB compatibility patch."
+        )
+        return True
+
+    try:
+        source = pc_region_growing.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:
+        print_error(f"Failed to read {pc_region_growing}: {exc}")
+        return False
+
+    patched, n_replacements = _STAPLE_OLD_COLON_EXPR.subn(
+        "Pts_Out(end+1:end+length(idx),:) =  Pts(idx,:);",
+        source,
+    )
+
+    if n_replacements == 0:
+        print_info("STAPLE MATLAB compatibility fix already present.")
+        return True
+
+    try:
+        pc_region_growing.write_text(patched, encoding="utf-8")
+    except Exception as exc:
+        print_error(f"Failed to write patched STAPLE file {pc_region_growing}: {exc}")
+        return False
+
+    print_success(
+        f"Applied STAPLE MATLAB R2023a+ compatibility fix in {pc_region_growing}."
+    )
+    return True
+
+
 def find_staple(paths: dict) -> bool:
     """
     Locate the MSK-STAPLE directory. Search order:
@@ -90,6 +145,8 @@ def find_staple(paths: dict) -> bool:
 
     def _accept(path: Path) -> bool:
         if path.is_dir():
+            if not _apply_staple_colon_fix(path):
+                return False
             paths["staple_path"] = str(path)
             print_success(f"MSK-STAPLE found at {path}.")
             return True
