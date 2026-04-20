@@ -37,7 +37,11 @@ MUSCLEMAP_YAML_CPU = CONFIG_DIR / "env_musclemap_cpu.yaml"
 # ── External tool defaults ────────────────────────────────────────────────────
 MUSCLEMAP_REPO_URL = "https://github.com/MuscleMap/MuscleMap.git"
 MUSCLEMAP_DEFAULT_DIR = SRC_DIR / "MuscleMap"
+
+STAPLE_REPO_URL = "https://github.com/modenaxe/msk-STAPLE.git"
 STAPLE_DEFAULT_DIR = SRC_DIR / "STAPLE"
+
+
 MASK_TO_MESH_DEFAULT_DIR = SRC_DIR / "cpp" / "mask_to_mesh"
 EXTRACT_ATTACHMENTS_DEFAULT_DIR = SRC_DIR / "cpp" / "extract_attachments"
 MUSCLE_WRAPPING_DEFAULT = SRC_DIR / "MW2" / "Build"

@@ -1,25 +1,23 @@
 """
-process_staple.py — Python wrapper for invoking MSK-STAPLE via the MATLAB Engine API.
+process_staple.py — Python wrapper for invoking MSK-STAPLE via MATLAB batch mode.
 
 Acts as a bridge between Snakemake and MATLAB, executing a user-supplied .m script and
 reorganising the generated outputs into the paths expected by the pipeline:
 
-    1. Start the MATLAB Engine.
+    1. Start MATLAB in batch mode.
     2. Add the STAPLE toolbox and the script directory to the MATLAB path.
     3. Expose input/output paths as MATLAB workspace variables.
     4. Run the .m script (e.g. hip_model.m).
-    5. Move the generated .osim file and Geometry folder to their target locations.
-    6. Clean up the temporary working directory and shut down the engine.
+    5. Let the script write outputs into the target locations and exit MATLAB.
 """
 
 import argparse
-import shutil
 import sys
 from pathlib import Path
 
 # Ensure runner/ is on the path so ui.py can be imported regardless of CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from runner.ui import print_info, print_success, print_warning, print_error, print_step
+from runner.ui import print_error, print_step
 
 import subprocess
 from runner.system import matlab_args
@@ -36,7 +34,7 @@ def run_staple(
     staple_path: Path,
     matlab_script_path: Path,
 ) -> None:
-    """Launch the MATLAB Engine, execute the STAPLE script, and organise outputs.
+    """Launch MATLAB in batch mode, execute the STAPLE script, and organise outputs.
 
     Parameters
     ----------
@@ -89,7 +87,7 @@ def run_staple(
 
 def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Run MSK-STAPLE via the MATLAB Engine API and organise its outputs."
+        description="Run MSK-STAPLE via MATLAB batch mode and organise its outputs."
     )
 
     p.add_argument(

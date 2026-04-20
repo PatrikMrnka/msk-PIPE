@@ -32,7 +32,7 @@ from .ui import console, print_fatal, print_header, print_section, print_info
 # Domain checks (each lives in its own module)
 from .external_tools import (
     check_muscle_wrapping,
-    find_staple_and_opensim,
+    find_staple,
     compile_mask_to_mesh,
     compile_extract_attachments,
 )
@@ -146,7 +146,7 @@ def main(input_path: str | None = None) -> None:
         _abort("MATLAB / OpenSim check failed.")
 
     # 6. MSK-STAPLE
-    if not find_staple_and_opensim(paths):
+    if not find_staple(paths):
         _abort("MSK-STAPLE path check failed.")
 
     # 7. MuscleMap

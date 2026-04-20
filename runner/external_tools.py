@@ -3,7 +3,7 @@ external_tools.py – Checks and builds external binary / library dependencies.
 
 Contains three independent checks, each focused on a single third-party tool:
   - check_muscle_wrapping        → verifies Muscle Wrapping 2.0 DLL
-  - find_staple_and_opensim      → locates the MSK-STAPLE MATLAB toolbox
+  - find_staple                  → locates the MSK-STAPLE MATLAB toolbox
   - compile_mask_to_mesh         → ensures the mask_to_mesh C++ binary is compiled
   - compile_extract_attachments  → ensures the extract_attachments C++ binary is compiled
 """
@@ -15,8 +15,9 @@ import platform
 import shutil
 import subprocess
 from pathlib import Path
+import tempfile
 
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 
 from . import constants as C
 from .ui import (
@@ -76,12 +77,13 @@ def check_muscle_wrapping(paths: dict) -> str | None:
 # ── MSK-STAPLE ────────────────────────────────────────────────────────────────
 
 
-def find_staple_and_opensim(paths: dict) -> bool:
+def find_staple(paths: dict) -> bool:
     """
-    Locate the MSK-STAPLE directory.  Search order:
+    Locate the MSK-STAPLE directory. Search order:
       1. Default location (src/STAPLE)
       2. STAPLE_PATH environment variable
-      3. User prompt
+      3. Automatic download
+      4. User prompt fallback
     Writes result into paths["staple_path"].
     """
     print_check("Checking MSK-STAPLE location")
@@ -102,9 +104,16 @@ def find_staple_and_opensim(paths: dict) -> bool:
     if env_val and _accept(Path(env_val)):
         return True
 
-    # 3. User prompt
+    # 3. Automatic download
+    print_warning("MSK-STAPLE not found locally.")
+    if Confirm.ask("Download MSK-STAPLE from GitHub automatically?", default=True):
+        if _clone_staple(C.STAPLE_DEFAULT_DIR):
+            if _accept(C.STAPLE_DEFAULT_DIR):
+                return True
+
+    # 4. User prompt fallback
     user_input = Prompt.ask(
-        "[yellow]MSK-STAPLE not found. Provide absolute path[/yellow]",
+        "[yellow]MSK-STAPLE path not configured. Provide absolute path[/yellow]",
         default=str(C.STAPLE_DEFAULT_DIR.resolve()),
     )
     if _accept(Path(user_input).resolve()):
@@ -343,3 +352,43 @@ def _cmake_build(src_dir: Path, build_dir: Path, vtk_cmake_dir: Path) -> bool:
 
     print_error("mask_to_mesh build step failed.")
     return False
+
+def _clone_staple(dest: Path) -> bool:
+    """
+    Clones the MSK-STAPLE repository into a temporary directory
+    and moves only the 'STAPLE' subfolder to the destination.
+    """
+    print_info("Cloning MSK-STAPLE repository from GitHub...")
+    
+    # Use TemporaryDirectory for automatic cleanup after download
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        
+        # 1. Clone the entire repository into the temporary directory
+        result = subprocess.run(
+            ["git", "clone", C.STAPLE_REPO_URL, str(tmp_path)],
+            capture_output=True, text=True, timeout=300,
+        )
+        
+        if result.returncode != 0:
+            print_error(f"Failed to clone MSK-STAPLE:\n{result.stderr}")
+            return False
+
+        staple_subfolder = tmp_path / "STAPLE"
+        if not staple_subfolder.is_dir():
+            print_error("STAPLE subfolder not found in the cloned repository.")
+            return False
+
+        # 2. Safe move: if destination exists (e.g., empty), remove it first
+        try:
+            if dest.exists():
+                shutil.rmtree(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Move the STAPLE folder from temp to src/STAPLE
+            shutil.move(str(staple_subfolder), str(dest))
+            print_success(f"MSK-STAPLE successfully downloaded to {dest}.")
+            return True
+        except Exception as e:
+            print_error(f"Failed to move STAPLE folder: {e}")
+            return False
