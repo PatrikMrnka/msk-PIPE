@@ -73,7 +73,6 @@ Key dependencies managed via `config/env_base.yaml`:
 | `pyvista`, `trimesh`, `open3d` | 3D mesh processing (atlas registration) |
 | `probreg`, `pycpd` | Point-cloud registration (CPD algorithm) |
 | `pymeshlab` | Mesh merging and splitting |
-| `matlabengine` | MATLAB Engine API for Python |
 
 ### Conda Environments
 
