@@ -1,8 +1,9 @@
 # MSK Pipeline
 
-Automated pipeline for musculoskeletal model generation from medical images.
-Converts CT/MRI scans into fully parameterised OpenSim biomechanical models
-through segmentation, meshing, and muscle wrapping.
+Automated pipeline for generating personalised musculoskeletal models from
+medical images. Converts CT/MRI scans into fully parameterised OpenSim
+biomechanical models (`.osim`) through segmentation, surface meshing,
+muscle-attachment extraction, and muscle-wrapping simulation.
 
 ## Architecture
 
@@ -15,178 +16,195 @@ python -m runner [--input <file_or_dir>]
         |
         v
   Pre-flight checks (runner/)
-    - GPU detection
-    - Conda environment setup (Micromamba)
-    - External tool verification (MW2, STAPLE, MATLAB, VTK)
+    - GPU detection (CUDA)
+    - Conda environment management (Micromamba)
+    - External tool verification (MW2, STAPLE, MATLAB, VTK, MuscleMap, TotalSegmentator)
     - C++ binary compilation (mask_to_mesh, extract_attachments)
         |
         v
   Snakemake DAG execution (workflow/)
-    Step 0:  Input preparation (NIfTI / RAW / DICOM)
-    Step 1:  Bone segmentation (TotalSegmentator)
-    Step 2:  Muscle segmentation (MuscleMap)
-    Step 3:  Muscle mask extraction (multi-label -> individual)
-    Step 4:  Mask cleaning (binarize, filter, morphology) -- per file
-    Step 5:  Mesh generation (NIfTI -> STL/OBJ via VTK) -- per file
-    Step 6:  Mesh renaming and merging for STAPLE
-    Step 7:  OpenSim bone model generation (MSK-STAPLE via MATLAB)
-    Step 8:  Muscle attachment extraction (C++ proximity search)
-    Step 9:  MuscleGeneratorTool XML configuration
-    Step 10: Muscle Wrapping 2.0 execution
+    Step 0:   Input preparation (NIfTI / RAW / DICOM)
+    Step 1:   Bone segmentation (TotalSegmentator)
+    Step 2:   Muscle segmentation (MuscleMap)
+    Step 3:   Muscle mask extraction (multi-label → individual)
+    Step 4:   Mask cleaning (binarise, filter, morphology) — per file
+    Step 5:   Mesh generation (NIfTI → STL/OBJ via VTK) — per file
+    Step 6:   Mesh merging for STAPLE
+    Step 7:   OpenSim bone model generation (MSK-STAPLE via MATLAB)
+    Step 8:   Muscle attachment extraction (proximity / atlas / user-provided)
+    Step 9:   MuscleGeneratorTool XML configuration
+    Step 10:  Muscle Wrapping 2.0 execution
+    Step 11:  Statistical evaluation and benchmarking
         |
         v
-  Output: pipeline_model.osim
-```
-
-## Project Structure
-
-```
-msk-pipeline/
-├── config/
-│   ├── config.json              # Main configuration (paths, parameters, labels)
-│   ├── muscle_topology.json     # Muscle-to-bone attachment definitions
-│   ├── env_base.yaml            # Conda env: Snakemake + core Python packages
-│   ├── env_totalseg_cpu.yaml    # Conda env: TotalSegmentator (CPU)
-│   ├── env_totalseg_gpu.yaml    # Conda env: TotalSegmentator (GPU)
-│   ├── env_musclemap_cpu.yaml   # Conda env: MuscleMap (CPU)
-│   └── env_musclemap_gpu.yaml   # Conda env: MuscleMap (GPU)
-├── runner/                      # Pipeline orchestration & pre-flight checks
-│   ├── __main__.py              # CLI entry point (python -m runner)
-│   ├── preflight.py             # Pre-flight check orchestrator
-│   ├── pipeline.py              # Snakemake launcher, run ID management
-│   ├── config_io.py             # JSON config load/save
-│   ├── constants.py             # Path constants and defaults
-│   ├── system.py                # GPU detection, process management
-│   ├── ui.py                    # Rich console output helpers
-│   ├── micromamba.py            # Conda environment management
-│   ├── external_tools.py        # External dependency checks & compilation
-│   ├── matlab.py                # MATLAB + OpenSim API setup
-│   └── musclemap.py             # MuscleMap repository setup
-├── workflow/
-│   ├── Snakefile                # Top-level orchestrator (includes rule modules)
-│   └── rules/
-│       ├── common.smk           # Shared constants, helpers, config derivation
-│       ├── input.smk            # Input format detection & normalisation
-│       ├── segmentation.smk     # TotalSegmentator + MuscleMap rules
-│       ├── preprocessing.smk    # Per-file mask cleaning rules
-│       ├── meshing.smk          # Per-file meshing, renaming, merging
-│       └── modeling.smk         # STAPLE, attachments, muscle wrapping
-├── src/
-│   ├── python/
-│   │   ├── validate_inputs.py
-│   │   ├── load_image.py
-│   │   ├── clean_masks.py                          # Mask post-processing
-│   │   ├── merge_meshes.py                         # Mesh merging & splitting
-│   │   ├── rename_bones.py                         # STAPLE name mapping
-│   │   ├── muscle_names.py                         # Shared muscle name mapping
-│   │   ├── converting_formats/
-│   │   │   ├── CT_dicom_to_nifti.py
-│   │   │   └── CT_raw_to_nifti.py
-│   │   ├── bones_segmentation/
-│   │   │   └── run_totalsegmentator.py
-│   │   ├── muscles_segmentation_extraction/
-│   │   │   ├── run_musclemap.py
-│   │   │   └── extract_muscle_masks.py
-│   │   ├── staple_processing/
-│   │   │   ├── process_staple.py
-│   │   │   └── hip_model.m
-│   │   └── extract_attachments_runner/
-│   │       ├── run_extraction.py
-│   │       └── generate_attachment_xml.py
-│   └── cpp/
-│       ├── mask_to_mesh/                           # NIfTI -> STL/OBJ (VTK)
-│       │   └── src/
-│       │       ├── main.cpp
-│       │       └── CMakeLists.txt
-│       └── extract_attachments/                    # Muscle-bone proximity
-│           └── src/
-│               ├── main.cpp
-│               ├── AttachmentExtractor.h
-│               ├── AttachmentExtractor.cpp
-│               └── CMakeLists.txt
-├── requirements.txt
-└── README.md
+  Output: pipeline_model.osim + statistical reports
 ```
 
 ## Prerequisites
 
 | Dependency | Purpose | Notes |
 |---|---|---|
-| **Python** 3.11+ | Runner and scripts | 3.12 for base env, 3.11.8 for MuscleMap |
+| **Python** 3.12 | Runner, scripts, Snakemake | 3.11.8 for MuscleMap environment |
 | **Micromamba** | Conda environment management | Auto-installed on Windows |
-| **Snakemake** | Workflow orchestration | Installed via conda |
+| **Snakemake** | Workflow orchestration | Installed via Conda (env_base) |
 | **MATLAB** R2018b+ | MSK-STAPLE model generation | Requires Curve Fitting and Statistics & ML toolboxes |
-| **CMake** >= 3.10 | C++ binary compilation | |
-| **VTK** 9.0+ | 3D mesh processing | Shipped with Muscle Wrapping 2.0 |
-| **Muscle Wrapping 2.0** (MW2) | Final muscle wrapping | Provides `opensim-cmd` and `OsimMuscleGeneratorTool.dll` |
-| **MSK-STAPLE** | OpenSim bone model generation | MATLAB toolbox |
-| **MuscleMap** | Muscle segmentation | Cloned from GitHub automatically |
-| **OpenSim** API | Biomechanical modelling | Configured via MW2's bundled OpenSim |
+| **CMake** ≥ 3.21 | C++ binary compilation | |
+| **VTK** 9.0+ | 3D mesh processing (C++) | Shipped with Muscle Wrapping 2.0 |
+| **Muscle Wrapping 2.0** | Final muscle-wrapping simulation | Provides `opensim-cmd` and `OsimMuscleGeneratorTool.dll` |
+| **MSK-STAPLE** | Automated bone model creation | MATLAB toolbox |
+| **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
+| **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
+
+### Python Libraries (env_base)
+
+Key dependencies managed via `config/env_base.yaml`:
+
+| Library | Purpose |
+|---|---|
+| `snakemake` | Pipeline orchestration |
+| `nibabel`, `SimpleITK` | NIfTI and DICOM I/O |
+| `pydicom` | DICOM file parsing |
+| `numpy`, `scipy` | Numerical computation, morphological operations |
+| `scikit-learn` | Metrics (RMSE, Pearson correlation) |
+| `pandas` | Tabular data processing (benchmarks, statistics) |
+| `matplotlib`, `seaborn` | Plot generation and PDF reports |
+| `rich`, `colorama` | Formatted console output |
+| `psutil` | System detection (GPU, processes) |
+| `pyvista`, `trimesh`, `open3d` | 3D mesh processing (atlas registration) |
+| `probreg`, `pycpd` | Point-cloud registration (CPD algorithm) |
+| `pymeshlab` | Mesh merging and splitting |
+| `matlabengine` | MATLAB Engine API for Python |
+
+### Conda Environments
+
+The pipeline manages several isolated Conda environments:
+
+| Environment | Config file | Purpose |
+|---|---|---|
+| `msk_base` | `config/env_base.yaml` | Snakemake + core Python scripts |
+| `msk_totalseg_cpu` | `config/env_totalseg_cpu.yaml` | TotalSegmentator (CPU) |
+| `msk_totalseg_gpu` | `config/env_totalseg_gpu.yaml` | TotalSegmentator (GPU + CUDA) |
+| `msk_musclemap_cpu` | `config/env_musclemap_cpu.yaml` | MuscleMap (CPU, PyTorch) |
+| `msk_musclemap_gpu` | `config/env_musclemap_gpu.yaml` | MuscleMap (GPU, PyTorch + CUDA 12.1) |
+
+### C++ Components
+
+Two C++ utilities compiled with CMake and linked against VTK 9.0+:
+
+- **mask_to_mesh** — converts NIfTI masks to surface meshes (Flying Edges extraction, Windowed-sinc smoothing, quadric decimation)
+- **extract_attachments** — extracts muscle-to-bone attachment regions via `vtkStaticCellLocator` proximity queries when **`proximity`** method is selected 
+
+## Project Structure
+
+```
+msk-pipeline/
+├── config/
+│   ├── config.json                # Main configuration (paths, parameters, labels)
+│   ├── muscle_topology.json       # Muscle-to-bone attachment definitions
+│   ├── env_base.yaml              # Conda env: Snakemake + core Python
+│   ├── env_totalseg_cpu.yaml      # Conda env: TotalSegmentator (CPU)
+│   ├── env_totalseg_gpu.yaml      # Conda env: TotalSegmentator (GPU)
+│   ├── env_musclemap_cpu.yaml     # Conda env: MuscleMap (CPU)
+│   └── env_musclemap_gpu.yaml     # Conda env: MuscleMap (GPU)
+├── data/
+│   ├── input/                     # Default input directory
+│       ├── landmarks/             # User provided landmarks of muscles
+│   ├── output/                    # Pipeline outputs (run_1, run_2, ...)
+│   ├── opensim/                   # Motion files (.mot) and activations (.sto)
+│   └── Experiments/               # LHDL reference datasets
+├── envs/                          # Environment directories
+├── runner/                        # Pipeline orchestration & pre-flight checks
+│   ├── __main__.py                # CLI entry point (python -m runner)
+│   ├── preflight.py               # Pre-flight check orchestrator
+│   ├── pipeline.py                # Snakemake launcher, run ID management
+│   ├── config_io.py               # JSON config load / save
+│   ├── constants.py               # Path constants and defaults
+│   ├── system.py                  # GPU detection, process management
+│   ├── ui.py                      # Rich console output helpers
+│   ├── micromamba.py              # Conda environment management
+│   ├── external_tools.py          # External dependency checks & compilation
+│   ├── matlab.py                  # MATLAB + OpenSim API setup
+│   └── musclemap.py               # MuscleMap repository setup
+├── src/
+│   ├── python/
+│   │   ├── validate_inputs.py                      # Input data validation
+│   │   ├── load_image.py                           # Medical image loading
+│   │   ├── clean_masks.py                          # Mask post-processing
+│   │   ├── split_mesh.py                           # Calling mesh splitting
+│   │   ├── merge_mesh.py                           # Calling mesh merging
+│   │   ├── mesh_ops.py                             # Mesh merging & splitting algorithms
+│   │   ├── subtract_bone_from_muscle.py            # Subtraction algorithm
+│   │   ├── generate_statistics.py                  # Pipeline vs LHDL comparison
+│   │   ├── generate_benchmark_plots.py             # Benchmark visualisation
+│   │   ├── converting_formats/
+│   │   │   ├── CT_dicom_to_nifti.py                # DICOM → NIfTI conversion
+│   │   │   └── CT_raw_to_nifti.py                  # RAW → NIfTI conversion
+│   │   ├── bones_segmentation/
+│   │   │   └── run_totalsegmentator.py             # TotalSegmentator wrapper
+│   │   ├── muscles_segmentation_extraction/
+│   │   │   ├── run_musclemap.py                    # MuscleMap wrapper
+│   │   │   └── extract_muscle_masks.py             # Multi-label → individual masks
+│   │   ├── staple_processing/
+│   │   │   ├── process_staple.py                   # STAPLE execution via MATLAB
+│   │   │   ├── hip_model.m                         # MATLAB script for hip model
+│   │   │   └── add_sacrum_mesh.py                  # Sacrum integration into .osim
+│   │   └── extract_attachments_runner/
+│   │       ├── generate_attachment_xml.py          # XML config generation
+│   │       └── map_lhdl_attachments.py             # Atlas registration (CPD)
+│   └── cpp/
+│       ├── mask_to_mesh/                           # NIfTI → STL/OBJ (C++/VTK)
+│       │   └── src/
+│       │       ├── main.cpp
+│       │       └── CMakeLists.txt
+│       └── extract_attachments/                    # Muscle-bone proximity (C++/VTK)
+│           └── src/
+│               ├── main.cpp
+│               ├── AttachmentExtractor.h
+│               ├── AttachmentExtractor.cpp
+│               └── CMakeLists.txt
+├── workflow/
+│   ├── Snakefile                  # Top-level orchestrator (includes rule modules)
+│   └── rules/
+│       ├── common.smk             # Shared constants, helpers, config derivation
+│       ├── input.smk              # Input format detection & normalisation
+│       ├── segmentation.smk       # TotalSegmentator + MuscleMap rules
+│       ├── preprocessing.smk      # Per-file mask cleaning rules
+│       ├── meshing.smk            # Mask-to-mesh, renaming, merging
+│       ├── modeling.smk           # STAPLE, attachments, muscle wrapping
+│       └── statistics.smk         # Post-run statistics & benchmark reports
+├── requirements.txt
+└── README.md
+```
 
 ## Input
 
-The pipeline accepts three input formats:
+The pipeline accepts three input formats. By default, the pipeline features an **Auto-Detection mechanism**. If you place your data into the default input directory (`data/input/`) and run the pipeline without arguments, it will automatically detect and process the first valid scan it finds.
 
-- **NIfTI** (`.nii` / `.nii.gz`) -- a single CT or MRI volume.
-- **DICOM** -- a directory of `.dcm` files (or extension-less DICOM files).
-- **RAW** -- a flat binary volume (`.raw`) with an accompanying `coordinates.txt`
-  file containing per-slice Z coordinates.
+The auto-detection scans for formats in the following priority:
+1. **NIfTI** (`.nii` / `.nii.gz`) — a single CT or MRI volume.
+2. **RAW** — a flat binary volume (`.raw`). *Note: Must be accompanied by a `coordinates.txt` file containing per-slice Z coordinates.*
+3. **DICOM** — a directory of `.dcm` files (or standard DICOM files without extensions).
 
-By default the pipeline scans `data/input/` for files. You can also specify an
-explicit input:
-
-```bash
-# Process a specific NIfTI file:
-python -m runner --input /path/to/scan.nii.gz
-
-# Process a DICOM directory:
-python -m runner --input /path/to/dicom_folder/
-
-# Auto-detect from the default input directory:
-python -m runner
-```
-
-## Output
-
-Each run produces a numbered directory under `data/output/`:
-
-```
-data/output/run_1/
-├── image/ct.nii.gz                     # Normalised input
-├── bone_segmentations/
-│   ├── raw/                            # TotalSegmentator output
-│   └── cleaned/                        # Post-processed bone masks
-├── muscle_segmentations/
-│   ├── raw/                            # MuscleMap output
-│   ├── extracted/                      # Individual muscle masks
-│   └── cleaned/                        # Post-processed muscle masks
-├── bone_models/                        # STL meshes
-├── bone_models_renamed/                # STAPLE-compatible names
-├── bone_models_merged/                 # Merged pairs
-├── muscle_models/                      # OBJ meshes
-├── Geometry/                           # OpenSim visualisation geometry
-├── attachments/                        # VTK attachment point clouds
-├── bone_model.osim                     # OpenSim bone model (STAPLE)
-├── setup_MuscleGeneratorTool.xml       # MW2 configuration
-└── pipeline_model.osim                 # Final OpenSim model
-```
+Alternatively, you can bypass auto-detection and specify a file directly using the `--input` flag which is considered a better option.
 
 ## Pipeline Steps
 
 ### Step 0: Input Preparation
-Detects the input format and converts it to a normalised NIfTI volume
-(`ct.nii.gz`). DICOM conversion uses SimpleITK (GDCM), RAW conversion uses
-nibabel with Z-coordinate handling.
+Detects the input format and converts DICOM or RAW data to standardised NIfTI
+(`.nii.gz`). NIfTI inputs are used as-is. 
 
 ### Step 1: Bone Segmentation
 Runs [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) to
-segment bone structures: pelvis (hip_left, hip_right), sacrum, femur (L/R),
-tibia, and fibula. Supports both CT and MR models, GPU or CPU.
+produce multi-label bone masks (pelvis, femur, tibia, fibula, sacrum).
+Supports both CT and MR modalities, GPU or CPU. In `config/config.json` user needs to change "totalsegmentator" {"model" = "ct" or "mr"} based on the input file.
 
 ### Step 2: Muscle Segmentation
-Runs [MuscleMap](https://github.com/MuscleMap/MuscleMap) to produce a
-multi-label segmentation of 17 lower-limb muscle groups (34 individual muscles,
-left and right).
+Runs [MuscleMap](https://github.com/MuscleMap/MuscleMap) or [TotalSegmentator](https://https://github.com/wasserth/TotalSegmentator) to produce a
+multi-label segmentation of lower-limb muscle groups based on the "muscle_segmentator" in `config/config.json` (Options: musclemap or totalsegmentor).
+Bone volumes are subtracted from muscle masks to prevent
+physical overlap.
+
+If [TotalSegmentator](https://https://github.com/wasserth/TotalSegmentator) is chosen, the masks of Gluteus Maximus/Medius/Minimus and Iliopsoas muscles are genereted, because they are the only muscles around hip that can be uniquely segmentated via this tool.
 
 ### Step 3: Muscle Mask Extraction
 Splits the multi-label MuscleMap output into individual binary masks using the
@@ -197,38 +215,50 @@ Per-file post-processing of segmentation masks:
 - Binarisation with configurable threshold
 - Connected-component analysis and small-component removal
 - Morphological closing and opening
-- Optional iterative hole filling
+- Iterative hole filling
 
 ### Step 5: Mesh Generation
 Converts cleaned NIfTI masks to surface meshes using a C++ binary built on VTK:
 - Flying Edges isosurface extraction
 - Windowed-sinc smoothing (configurable iterations and passband)
+- Quadric edge-collapse decimation
 - Topology cleaning and triangulation
-- Bones are saved as STL, muscles as OBJ
+- Bones → `.stl`, muscles → `.obj`
 
 ### Step 6: Mesh Renaming and Merging
-- Renames bone meshes to STAPLE-compatible names (e.g. `hip_left` ->
-  `pelvis_no_sacrum`)
-- Merges pelvis halves, splits tibia+fibula/patella/phalanges into L/R
-  components using PyMeshLab
+- Renames bone meshes to STAPLE-compatible names (e.g. `hip_left` → `pelvis_no_sacrum`)
+- Merges pelvis halves and splits composite meshes (tibia/fibula) using PyMeshLab
 
 ### Step 7: OpenSim Bone Model (MSK-STAPLE)
-Invokes MATLAB to run the MSK-STAPLE toolbox, which computes joint coordinate
-systems, assigns mass properties, and generates `bone_model.osim`.
+Invokes MATLAB to run the MSK-STAPLE toolbox, which computes anatomical and
+joint coordinate systems, assigns mass properties, and generates
+`bone_model.osim`.
 
 ### Step 8: Attachment Extraction
-A C++ binary uses `vtkStaticCellLocator` to find muscle vertices within a
-configurable distance threshold of each bone surface. Outputs ordered contour
-points as VTK point clouds.
+Three methods available (configured via `config.json` in "attachment_extraction/method"):
+- **`proximity`** — C++ binary uses `vtkStaticCellLocator` to find muscle vertices within a configurable distance threshold of each bone surface; outputs ordered contour points as VTK point clouds.
+- **`atlas_registration`** — maps reference LHDL attachment areas onto patient-specific bone geometry using Coherent Point Drift (CPD) registration.
+- **`user_provided`** — copies user-supplied `.vtk` attachment files directly from `data/input/landmarks` folder.
+
+### Step 8.1: User provided attachments
+If the `user_provided` method is selected, the names of attachment files needs to follow names from `config/muscle_topology.json` file (such as **GluteusMaximus**) and have the **_Ori** (Origin) and **_Ins** (Insertion) sufixes.
 
 ### Step 9: XML Configuration
-Generates `setup_MuscleGeneratorTool.xml` with mesh references, attachment
-areas, fibre parameters, and joint interaction information extracted from the
-bone model.
+Generates `setup_MuscleGeneratorTool.xml` linking the bone model, muscle meshes,
+attachment VTKs, motion file, and fibre-generation algorithm
+(`Luca2018viaPoints` or `Havlicek2024XPBDAlgorithm`) which can be modified via "muscle_wrapping/kinematics_algorithm" option in file `config/config.json` .
 
 ### Step 10: Muscle Wrapping
-Runs OpenSim's `opensim-cmd` with `OsimMuscleGeneratorTool.dll` to produce the
-final `pipeline_model.osim` with wrapped muscle fibres.
+Runs OpenSim's `opensim-cmd` with `OsimMuscleGeneratorTool.dll`, from the MW2 build path, to produce the
+final `pipeline_model.osim` with wrapped and deformed muscle fibres.
+
+### Step 11: Statistical Evaluation
+Compares pipeline output kinematics against LHDL reference datasets:
+- Per-muscle RMSE and Pearson correlation
+- Relative error metrics (% of ground-truth mean and range)
+- PDF report with comparison plots
+- CSV summary table
+- Optional benchmark report (runtime, RAM, CPU, disk I/O per Snakemake rule)
 
 ## Configuration
 
@@ -238,6 +268,8 @@ All pipeline parameters are in `config/config.json`:
 |---|---|---|
 | `paths.input_dir` | `data/input` | Default input directory |
 | `paths.output_dir` | `data/output` | Output base directory |
+| `paths.muscle_wrapping_path` | `src/MW2/Build` | Path to Muscle Wrapping 2.0 |
+| `paths.staple_path` | `src/STAPLE` | Path to MSK-STAPLE toolbox |
 | `totalsegmentator.device` | `gpu` / `cpu` | Segmentation device |
 | `totalsegmentator.model` | `ct` / `mr` | Imaging modality |
 | `totalsegmentator.fast` | `true` / `false` | Fast mode (lower resolution) |
@@ -245,24 +277,80 @@ All pipeline parameters are in `config/config.json`:
 | `muscle_preprocessing.*` | | Mask cleaning parameters for muscles |
 | `bone_to_mesh.*` | | Smoothing parameters for bone meshes |
 | `muscle_to_mesh.*` | | Smoothing parameters for muscle meshes |
-| `attachment_extraction.threshold_mm` | `2.0` | Distance threshold for attachments |
-| `muscle_map.labels` | | Muscle name -> label ID mapping |
+| `attachment_extraction.method` | `proximity` / `atlas_registration` / `user_provided` | Attachment extraction strategy |
+| `attachment_extraction.threshold_mm` | `2.0` | Distance threshold (proximity method) |
+| `attachment_extraction.clip_fraction` | `0.25` | Clip fraction (proximity method) |
+| `muscle_wrapping.kinematics_algorithm` | `luca` / `havlicek` | Fibre generation algorithm |
+| `muscle_map.labels` | | Muscle name → label ID mapping |
+| `user_settings.enable_benchmarking` | `true` / `false` | Generate benchmark reports |
 
 Muscle-to-bone attachment topology is defined in `config/muscle_topology.json`.
 
-## Running
+## Output Structure
 
-```bash
-# Full pipeline with pre-flight checks:
-python -m runner
+Each pipeline run produces a sequentially numbered directory:
 
-# Skip pre-flight checks (if dependencies are already set up):
-# Set "skip_preflight_checks": true in config/config.json
-
-# With a specific input:
-python -m runner --input /path/to/scan.nii.gz
+```
+data/output/run_N/
+├── bone_masks/              # Individual bone masks (.nii.gz)
+├── muscle_masks/            # Individual muscle masks (.nii.gz)
+├── bone_models/             # Bone surface meshes (.stl)
+├── muscle_models/           # Muscle surface meshes (.obj)
+├── bones_STAPLE/            # Renamed/merged meshes for STAPLE
+├── Geometry/                # Final bone geometries (.obj) for OpenSim
+├── attachments/             # Muscle attachment VTK files
+├── bone_model.osim          # Bone-only OpenSim model
+├── setup_MuscleGeneratorTool.xml
+├── pipeline_model.osim      # Final model with wrapped muscles
+├── Experiments/             # Muscle fibre length data (.sto)
+├── statistics/              # Comparison reports and benchmarks
+│   ├── Kinematika_Report.pdf
+│   ├── Celkove_Statistiky_s_Procenty.csv
+│   ├── Benchmark_Report.pdf
+│   └── summary_metadata.txt
+└── benchmarks/              # Per-rule Snakemake benchmark files
 ```
 
-## License
+And reports folder:
+```
+data/output/reports/run_N/
+├── dag.pdf
+├── rulegraph.pdf
+├── snakemake_report.html
+├── summary.txt
+```
 
-See repository for license details.
+## Usage
+
+You can launch the pipeline in fully automatic mode or specify your inputs explicitly:
+
+```bash
+# 1. Automatic Mode
+# Automatically scans data/input/ for NIfTI, RAW, or DICOM files and processes the first one found.
+python -m runner
+
+# 2. Explicit Input (NIfTI or RAW)
+# Run with a specific input file, ignoring the data/input/ directory.
+python -m runner --input /path/to/patient_ct {.nii.gz/.raw}
+
+# 3. Explicit Input (DICOM)
+# Run with a specific directory containing DICOM slices.
+python -m runner --input /path/to/dicom_folder/
+```
+
+The runner will interactively prompt for any missing settings (input format,
+number of CPU cores, whether to generate reports) and persist them for
+subsequent runs.
+
+## Algorithms and Methods
+
+- **Bone segmentation**: TotalSegmentator (nnU-Net-based, multi-label, CT/MR)
+- **MusclaMap muscle segmentation**: MuscleMap (deep-learning, lower-limb muscles)
+- **TotalSegmentator muscle segmentation**: Totalsegmentator (nnU-Net-based, hip muscles)
+- **Surface reconstruction**: Flying Edges isosurface extraction (VTK)
+- **Mesh smoothing**: Windowed-sinc (Taubin) smoothing — shrinkage-free
+- **Mesh decimation**: Quadric edge-collapse decimation
+- **Bone modelling**: MSK-STAPLE (automatic ACS/JCS from bone geometry)
+- **Attachment extraction**: vtkStaticCellLocator proximity + contour extraction, or CPD atlas registration or user provided
+- **Muscle simulation**: Position Based Dynamics / XPBD (Muscle Wrapping 2.0)
+- **Statistical validation**: RMSE, Pearson correlation against LHDL reference

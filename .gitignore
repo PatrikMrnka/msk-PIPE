@@ -18,4 +18,6 @@ MuscleMap
 *.raw
 *.dcm
 
+mri.vtk
+
 data/output/
