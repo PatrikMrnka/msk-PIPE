@@ -42,43 +42,43 @@ rule msk_staple:
             --mesh-file "bone_models/sacrum.stl"
         """
 
-rule convert_to_vtk_bones:
-    input:
-        bones_dir=os.path.join(OUT_DIR, "bone_models", "{bone}.stl"),
-    output:
-        vtks_dir=os.path.join(OUT_DIR, "VTK", "{bone}.vtk"),
-    wildcard_constraints:
-        bone="|".join(BONE_MASKS),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    benchmark:
-        os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_bones_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-    shell:
-        """
-        "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
-            --input {input.bones_dir} \
-            --output {output.vtks_dir}
-        """
+# rule convert_to_vtk_bones:
+#     input:
+#         bones_dir=os.path.join(OUT_DIR, "bone_models", "{bone}.stl"),
+#     output:
+#         vtks_dir=os.path.join(OUT_DIR, "VTK", "{bone}.vtk"),
+#     wildcard_constraints:
+#         bone="|".join(BONE_MASKS),
+#     params:
+#         py_exe=get_py_exe("msk_base"),
+#     benchmark:
+#         os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_bones_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+#     shell:
+#         """
+#         "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
+#             --input {input.bones_dir} \
+#             --output {output.vtks_dir}
+#         """
 
 MUSCLES = list(MUSCLE_LABELS)
 
-rule convert_to_vtk_muscles:
-    input:
-        muscles_path=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj")
-    output:
-        vtks_dir=os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"),
-    wildcard_constraints:
-        muscle="|".join(MUSCLE_LABELS),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    benchmark:
-        os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_muscles_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-    shell:
-        """
-        "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
-            --input {input.muscles_path} \
-            --output {output.vtks_dir}
-        """
+# rule convert_to_vtk_muscles:
+#     input:
+#         muscles_path=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj")
+#     output:
+#         vtks_dir=os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"),
+#     wildcard_constraints:
+#         muscle="|".join(MUSCLE_LABELS),
+#     params:
+#         py_exe=get_py_exe("msk_base"),
+#     benchmark:
+#         os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_muscles_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+#     shell:
+#         """
+#         "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
+#             --input {input.muscles_path} \
+#             --output {output.vtks_dir}
+#         """
 # ---------------------------------------------------------------------------
 # Step 8: Extract muscle-to-bone attachment points
 # ---------------------------------------------------------------------------
@@ -89,6 +89,8 @@ LHDL_MUSCLES = config.get("attachment_extraction", {}).get("lhdl_muscles_dir", "
 
 BONE_MUSCLE_MAP = {}
 for muscle_name, roles in TOPOLOGY.items():
+    if METHOD == "user_provided" and not roles.get("include_in_xml", True):
+        continue
     for role in ("origin", "insertion"):
         bone_name = roles[role]
         if bone_name not in BONE_MUSCLE_MAP:

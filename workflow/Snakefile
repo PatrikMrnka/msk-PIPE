@@ -41,5 +41,5 @@ rule all:
         os.path.join(OUT_DIR, "statistics", "Celkove_Statistiky_s_Procenty.csv"), # Vyžádá CSV
         (os.path.join(OUT_DIR, "statistics", "Benchmark_Report.pdf") if config.get("user_settings", {}).get("enable_benchmarking", True) else []),
         os.path.join(OUT_DIR, "statistics", "summary_metadata.txt"),
-        expand(os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"), muscle=MUSCLES),
-        expand(os.path.join(OUT_DIR, "VTK", "{bone}.vtk"), bone=BONE_MASKS)
+        # expand(os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"), muscle=MUSCLES),
+        # expand(os.path.join(OUT_DIR, "VTK", "{bone}.vtk"), bone=BONE_MASKS)

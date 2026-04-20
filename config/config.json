@@ -60,7 +60,7 @@
         "passband": 0.01
     },
     "attachment_extraction": {
-        "method": "atlas_registration",
+        "method": "user_provided",
         "lhdl_bones_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\bones",
         "lhdl_muscles_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\muscles",
         "threshold_mm": 4.0,

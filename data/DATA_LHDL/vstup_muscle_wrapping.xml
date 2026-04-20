@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSimDocument Version="20302">
+  <MuscleGeneratorTool name="GenericFemale_WCB_MGT">
+
+    <!--Name of the .osim file used to construct a model.-->
+    <model_file>GenericFemale_WCB.osim</model_file>
+
+    <!-- Name of the .mot file used to fuse motion to the model. -->
+    <motion_file>hip_flexion_kinematics.mot</motion_file> --> 
+
+    <!--Name of the .osim file where to store the output model with generated dynamic muscles.-->
+    <output_model_file>GenericFemale_WCB_Flex.osim</output_model_file>
+    <!-- <export_folder>../Experiments/LHDL</export_folder> -->
+    <output_muscle_analysis_file_prefix>C:\msk_pipe\data\DATA_LHDL\Experiments\</output_muscle_analysis_file_prefix>
+
+    <MuscleGeneratorSet>
+      <objects>
+	  		<MuscleGenerator name="Iliacus">
+			<!-- The description of the geometry of this muscle in the rest-pose position. Note, the rest-pose must be the first position in the motion file. -->
+			<MuscleGeometry>
+			  <body>pelvis</body>
+			  <Mesh name="Iliacus">
+				<!--Scale factors in X, Y, Z directions respectively.-->
+				<scale_factors>0.001 0.001 0.001</scale_factors>
+				<!--Name of geometry file.-->
+				<mesh_file>muscles/iliacus_r/Iliacus.obj</mesh_file>
+			  </Mesh>
+  
+			  <!--The origin and insertion attachment areas for this muscle-->
+			  <attachment_areas>
+				<AttachmentArea name="origin Ilium">
+				  <type>origin</type>
+				  <body>pelvis</body>
+				  <point_file>muscles/iliacus_r/Iliacus_Ori.vtk</point_file>
+					<!--Scale factors in X, Y, Z directions respectively.-->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+				</AttachmentArea>
+  
+				<AttachmentArea name="insertion Femur">
+				  <type>insertion</type>
+				  <body>femur_r</body>
+				  <point_file>muscles/iliacus_r/Iliacus_Ins.vtk</point_file>
+					<!--Scale factors in X, Y, Z directions respectively.-->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+				</AttachmentArea>
+			  </attachment_areas>
+			</MuscleGeometry>
+  
+			<!-- Fibre template to use: parallel, fanned, curved, pennate, rectus - CURRENTLY IGNORED -->
+			<fiber_template> parallel </fiber_template>
+			<!-- Fiber template sampling mode: uniform, random -->
+			<fiber_arrangement> uniform </fiber_arrangement>
+			<!-- How many geometry paths will be created from the volume -->
+			<num_of_lines> 100 </num_of_lines> 
+			<line_res> 15 </line_res>
+		</MuscleGenerator>
+	  <MuscleGenerator name="GluteusMaximus">
+			<!-- The description of the geometry of this muscle in the rest-pose position. Note, the rest-pose must be the first position in the motion file. -->
+			<MuscleGeometry>
+			  <body>pelvis</body>
+			  <Mesh name="GluteusMaximus">
+					<!--Scale factors in X, Y, Z directions respectively.-->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+					<!--Name of geometry file.-->
+				<mesh_file>muscles/gluteus_maximus_r/GluteusMaximus.obj</mesh_file>
+			  </Mesh>
+  
+			  <!--The origin and insertion attachment areas for this muscle-->
+			  <attachment_areas>
+				<AttachmentArea name="origin Iliacus">
+				  <type>origin</type>
+				  <body>pelvis</body>
+				  <point_file>muscles/gluteus_maximus_r/GluteusMaximus_Ori.vtk</point_file>
+					<!--Scale factors in X, Y, Z directions respectively.-->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+				</AttachmentArea>
+  
+				<AttachmentArea name="insertion Femur">
+				  <type>insertion</type>
+				  <body>femur_r</body>
+				  <point_file>muscles/gluteus_maximus_r/GluteusMaximus_Ins.vtk</point_file>
+					<!--Scale factors in X, Y, Z directions respectively.-->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+				</AttachmentArea>
+			  </attachment_areas>
+			</MuscleGeometry>
+  
+			<!-- Fibre template to use: parallel, fanned, curved, pennate, rectus - CURRENTLY IGNORED -->
+			<fiber_template> parallel </fiber_template>
+			<!-- Fiber template sampling mode: uniform, random -->
+			<fiber_arrangement> uniform </fiber_arrangement>
+			<!-- How many geometry paths will be created from the volume -->
+			<num_of_lines> 100 </num_of_lines> 
+			<line_res> 15 </line_res>
+		</MuscleGenerator>
+	  </objects>
+      <groups/>
+    </MuscleGeneratorSet>
+
+    <!-- Specify the algorithm to use for muscle mesh deformation  -->
+
+	<!-- <kinematics_fibre_algorithm> -->
+		<!-- <Havlicek2024XPBDAlgorithm> -->
+		<!-- </Havlicek2024XPBDAlgorithm> -->
+	<!-- </kinematics_fibre_algorithm> -->
+    <!-- <!-- <kinematics_fibre_algorithm> --> -->
+		<!-- <!-- <Havlicek2024XPBDAlgorithm>	 --> -->
+
+			<!-- <!-- <joint_interaction_information> --> -->
+				<!-- <!-- <!-- Information describing the interactions of a joint under various angles. --> --> -->
+				<!-- <!-- <JointInteractionInformation name="hip_r"> --> -->
+					<!-- <!-- <body>femur_r</body> --> -->
+					<!-- <!-- <!-- The position of the physiological joint centre. --> --> -->
+					<!-- <!-- <centre>143.797	243.457 -432.585</centre> --> -->
+					<!-- <!-- <!-- The orientation of the physiological joint centre. --> --> -->
+					<!-- <!-- <orientation>-0.3626 -1.5127 -2.0524</orientation> --> -->
+					<!-- <!-- <!-- Scale factors of the centre coordinates in X, Y, Z directions respectively. --> --> -->
+					<!-- <!-- <scale_factors>0.001 0.001 0.001</scale_factors> --> -->
+					<!-- <!-- <!-- Muscles involved for the movements of this joint. --> --> -->
+					<!-- <!-- <muscles_involved> --> -->
+						<!-- <!-- GluteusMaximus GluteusMedius GluteusMinimus Piriformis  --> -->
+						<!-- <!-- Sartorius TensorFasciaLatae Gracialis Iliacus Pectineus  --> -->
+						<!-- <!-- Psoas Semitendinosus Semimembranosus BicepsFemoris  --> -->
+						<!-- <!-- RectusFemoris AdductorMagnus AdductorLongus AdductorBrevis --> -->
+					<!-- <!-- </muscles_involved> --> -->
+					<!-- <!-- <!-- A .sto file containing the activations of muscles for various angles. --> --> -->
+					<!-- <!-- <muscle_activations_file>hip_activations.sto</muscle_activations_file> --> -->
+				<!-- <!-- </JointInteractionInformation> --> -->
+			<!-- <!-- </joint_interaction_information> --> -->
+	<!-- <!-- </Havlicek2024XPBDAlgorithm> --> -->
+
+   <!-- <!-- </kinematics_fibre_algorithm> --> -->
+
+  </MuscleGeneratorTool>
+</OpenSimDocument>

@@ -30,4 +30,4 @@ dependencies:
     - open3d
     - matlabengine==25.2.2
     - pymeshlab
-    - vtk # ODSTRANIT!!! POUZE TED
+    # - vtk # ODSTRANIT!!! POUZE TED
