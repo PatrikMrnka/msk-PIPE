@@ -111,6 +111,43 @@ for muscle_name, roles in TOPOLOGY.items():
         BONE_MUSCLE_MAP[bone_name]["outputs"].append(out_vtk)
 
 
+# ---------------------------------------------------------------------------
+# Step 7.5: Clean bone meshes produced by MSK-STAPLE (in place, one-by-one)
+# ---------------------------------------------------------------------------
+# `rule msk_staple` outputs `Geometry/` as a `directory(...)` artefact.  Because
+# Snakemake does not track the individual files inside, we enumerate the bones
+# expected there (everything in BONE_MUSCLE_MAP except the merged
+# `pelvis_with_sacrum`, which is cleaned in meshing.smk) and clean each *.obj
+# in place via its own rule - this is what enables parallel execution.
+
+GEOMETRY_BONES = [b for b in BONE_MUSCLE_MAP.keys() if b != "pelvis_with_sacrum"]
+
+
+rule clean_geometry_mesh:
+    input:
+        geom_dir=os.path.join(OUT_DIR, "Geometry"),
+    output:
+        sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry_{geom_bone}.sentinel")),
+    params:
+        py_exe=get_py_exe("msk_base"),
+        mesh=lambda w: os.path.join(OUT_DIR, "Geometry", f"{w.geom_bone}.obj"),
+    wildcard_constraints:
+        geom_bone="|".join(GEOMETRY_BONES) if GEOMETRY_BONES else "__none__",
+    benchmark:
+        os.path.join(OUT_DIR, "benchmarks", "clean_geometry_mesh_{geom_bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+    shell:
+        """
+        "{params.py_exe}" src/python/clean_mesh.py --input "{params.mesh}"
+        """
+
+
+rule all_geometry_cleaned:
+    input:
+        [os.path.join(OUT_DIR, ".cleaned_meshes", f"geometry_{b}.sentinel") for b in GEOMETRY_BONES],
+    output:
+        touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done")),
+
+
 if METHOD == "segmentation_proximity":
     for bone, mappings in BONE_MUSCLE_MAP.items():
         rule:
@@ -118,7 +155,9 @@ if METHOD == "segmentation_proximity":
                 f"extract_attachments_{bone}"
             input:
                 geom_dir=os.path.join(OUT_DIR, "Geometry"),
-                pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.obj") if bone == "pelvis_with_sacrum" else [],
+                geom_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done"),
+                pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
+                pelvis_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel") if bone == "pelvis_with_sacrum" else [],
                 muscles_done=os.path.join(OUT_DIR, "muscle_models", ".done")
             output:
                 done=touch(os.path.join(OUT_DIR, "attachments", f".done_{bone}"))
@@ -142,7 +181,9 @@ elif METHOD == "atlas_registration":
                 f"extract_attachments_lhdl_{bone}"
             input:
                 geom_dir=os.path.join(OUT_DIR, "Geometry"),
+                geom_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done"),
                 pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
+                pelvis_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel") if bone == "pelvis_with_sacrum" else [],
                 # Načítáme dynamicky všechny LHDL úpony jako závislost tohoto pravidla
                 lhdl_att=mappings["inputs"]
             output:
@@ -213,6 +254,8 @@ rule prepare_muscle_wrapping:
         kinematics_algorithm=config.get("muscle_wrapping", {}).get(
             "kinematics_algorithm", "luca"
         ),
+        num_lines=config.get("muscle_wrapping", {}).get("num_lines", 100),
+        line_res=config.get("muscle_wrapping", {}).get("line_res", 15)
     benchmark:
         os.path.join(OUT_DIR, "benchmarks", "prepare_muscle_wrapping.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
@@ -225,7 +268,8 @@ rule prepare_muscle_wrapping:
             --topology  config/muscle_topology.json \
             --out-xml   {output.xml} \
             --kinematics-algorithm {params.kinematics_algorithm} \
-            --num-lines 100
+            --num-lines {params.num_lines} \
+            --line-res {params.line_res}
         """
 
 
