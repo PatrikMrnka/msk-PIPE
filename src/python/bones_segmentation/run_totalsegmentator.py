@@ -1,3 +1,19 @@
+"""
+run_totalsegmentator.py
+~~~~~~~~~~~~~~~~~~~~~~~
+Run TotalSegmentator and write masks to a folder.
+
+Supports MR and CT models, and allows segmenting specific ROIs (e.g. bones).
+
+Usage
+-----
+    python run_totalsegmentator.py \
+        input.nii.gz \
+        --output-dir output_masks/ \
+        --model ct \
+        --device cpu
+"""
+
 import argparse
 import sys
 from pathlib import Path
@@ -46,7 +62,7 @@ def run_totalsegmentator(
         ]
         appendicular_map_key = "appendicular_bones_mr"
         
-        # Přidáme proměnné pro názvy tasků
+        # Add variables for task names
         task_total = "total_mr"
         task_append = "appendicular_bones_mr"
         
@@ -58,7 +74,7 @@ def run_totalsegmentator(
         ]
         appendicular_map_key = "appendicular_bones"
         
-        # Proměnné pro CT tasky
+        # Variables for CT tasks
         task_total = "total"
         task_append = "appendicular_bones"
         
@@ -83,7 +99,7 @@ def run_totalsegmentator(
         totalsegmentator(
             input=str(in_path),
             output=str(out_dir),
-            task=task_append, # Dynamická proměnná
+            task=task_append, # Dynamic variable
             fast=bool(fast),
             device=device,
         )

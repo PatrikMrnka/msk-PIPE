@@ -1,6 +1,17 @@
-#!/usr/bin/env python3
 """
+extract_muscle_masks.py
+~~~~~~~~~~~~~~~~~~~~~~~
 Extract selected muscle masks from MuscleMap multi-label segmentation.
+
+Extracts individual muscle masks from a single multi-label NIfTI segmentation
+file, saving each muscle as a separate NIfTI file based on config mapping.
+
+Usage
+-----
+    python extract_muscle_masks.py \
+        segmentation_dseg.nii.gz \
+        --output-dir individual_masks/ \
+        --config config/config.json
 """
 
 import argparse

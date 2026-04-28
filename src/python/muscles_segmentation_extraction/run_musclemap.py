@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-MuscleMap Segmentation Runner
-Segments muscles (Abductor Brevis, Gluteus Medius, Gluteus Maximus, Iliacus)
-from CT/MRI images using MuscleMap.
+run_musclemap.py
+~~~~~~~~~~~~~~~~
+MuscleMap Segmentation Runner.
+
+Segment muscles from CT/MRI images using MuscleMap.
+
+Usage
+-----
+    python run_musclemap.py \
+        input.nii.gz \
+        --output-dir output_masks/ \
+        --spatial-overlap 75
 """
 
 import argparse
@@ -37,8 +46,6 @@ def run_musclemap(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Prefer invocation methods that do not depend on PATH activation.
-    # This avoids WinError 2 when Snakemake runs Python directly from env.
 
     print_step(f"Running MuscleMap segmentation on {input_nifti}")
     print_info(f"Spatial overlap: {spatial_overlap}%")
@@ -71,8 +78,7 @@ def run_musclemap(
         if mm_exe.exists():
             candidates.append([str(mm_exe), *common_args])
 
-        # 3) Direct script fallback from local repository clone
-        # .../src/python/02a_muscles_segm/2a_run_musclemap.py -> .../src/MuscleMap/scripts/mm_segment.py
+        # 3) Direct script call as fallback (works if MuscleMap is not installed but source is present)
         mm_script = (
             Path(__file__).resolve().parents[2]
             / "MuscleMap"

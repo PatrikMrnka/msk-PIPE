@@ -25,12 +25,12 @@ rule statistics_compare:
         pdf_report=report(
             os.path.join(OUT_DIR, "statistics", "Kinematika_Report.pdf"),
             category="Statistics",
-            subcategory="Plots",
+            subcategory="Grafy",
         ),
         csv_stats=report(
             os.path.join(OUT_DIR, "statistics", "Celkove_Statistiky_s_Procenty.csv"),
             category="Statistics",
-            subcategory="Tables"
+            subcategory="Tabulky"
         )
     params:
         py_exe=get_py_exe("msk_base"),

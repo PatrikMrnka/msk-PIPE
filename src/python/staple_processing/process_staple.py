@@ -1,5 +1,7 @@
 """
-process_staple.py — Python wrapper for invoking MSK-STAPLE via MATLAB batch mode.
+process_staple.py
+~~~~~~~~~~~~~~~~~
+Python wrapper for invoking MSK-STAPLE via MATLAB batch mode.
 
 Acts as a bridge between Snakemake and MATLAB, executing a user-supplied .m script and
 reorganising the generated outputs into the paths expected by the pipeline:
@@ -9,6 +11,15 @@ reorganising the generated outputs into the paths expected by the pipeline:
     3. Expose input/output paths as MATLAB workspace variables.
     4. Run the .m script (e.g. hip_model.m).
     5. Let the script write outputs into the target locations and exit MATLAB.
+
+Usage
+-----
+    python process_staple.py \
+        --input-dir data/temp/staple_in \
+        --output-osim data/temp/bone_model.osim \
+        --output-geom-dir data/temp/Geometry \
+        --staple-path /path/to/STAPLE \
+        --matlab-script hip_model.m
 """
 
 import argparse

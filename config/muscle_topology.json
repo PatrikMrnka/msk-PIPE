@@ -39,7 +39,7 @@
         "origin": "pelvis_with_sacrum",
         "insertion": "femur_r",
         "label": "pectineus_r",
-        "include_in_xml": false
+        "include_in_xml": true
     },
     "AdductorMagnus": {
         "origin": "pelvis_with_sacrum",
@@ -99,13 +99,13 @@
         "origin": "femur_r",
         "insertion": "femur_r",
         "label": "vastus_lateralis_r",
-        "include_in_xml": false
+        "include_in_xml": true
     },
     "VastusMedialis": {
         "origin": "femur_r",
         "insertion": "femur_r",
         "label": "vastus_medialis_r",
-        "include_in_xml": false
+        "include_in_xml": true
     },
     "ObturatorExternus": {
         "origin": "pelvis_with_sacrum",

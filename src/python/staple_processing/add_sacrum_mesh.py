@@ -1,9 +1,17 @@
 """
+add_sacrum_mesh.py
+~~~~~~~~~~~~~~~~~~
 Insert sacrum display mesh under pelvis attached_geometry in a generated OpenSim model.
 
 This script is intentionally idempotent:
 - if pelvis or attached_geometry is missing, it fails with a clear error,
 - if Mesh name="sacrum_geom" already exists in pelvis, it does nothing.
+
+Usage
+-----
+    python add_sacrum_mesh.py \
+        --osim bone_model.osim \
+        --mesh-file bone_models\\sacrum.stl
 """
 
 import argparse

@@ -8,11 +8,10 @@ This is the main entry point for the pre-flight check phase. It performs the fol
 5. Checks for MATLAB and OpenSim API availability.
 6. Checks for MSK-STAPLE availability.
 7. Checks for MuscleMap setup and availability.
-8. Checks for mask2stl C++ binary availability.
-9. Checks for extract_attachments C++ binary availability.
-10. Prompts user to select input data format if not already set.
-11. Saves any updated settings/config.
-12. Hands off to the main pipeline runner.
+8. Checks for C++ tools (mask_to_mesh, extract_attachments) availability.
+9. Prompts user to select input data format if not already set.
+10. Saves any updated settings/config.
+11. Hands off to the main pipeline runner.
 """
 
 from __future__ import annotations
@@ -33,8 +32,7 @@ from .ui import console, print_fatal, print_header, print_section, print_info
 from .external_tools import (
     check_muscle_wrapping,
     find_staple,
-    compile_mask_to_mesh,
-    compile_extract_attachments,
+    compile_cpp_tools,
 )
 from .matlab import check_matlab
 from .musclemap import check_and_setup_musclemap
@@ -93,7 +91,7 @@ def main(input_path: str | None = None) -> None:
         paths["input_path"] = str(Path(input_path).resolve())
 
     # Migrate paths and env_file_hashes if they exist in user_settings
-    for path_key in ["muscle_wrapping_path", "staple_path", "mask_to_mesh_path", "vtk_path", "extract_attachments_path"]:
+    for path_key in ["muscle_wrapping_path", "staple_path", "cpp_tools_path", "vtk_path"]:
         if path_key in user_settings:
             val = user_settings.pop(path_key)
             if val:
@@ -153,24 +151,20 @@ def main(input_path: str | None = None) -> None:
     if not check_and_setup_musclemap(_musclemap_env_name(has_gpu)):
         _abort("MuscleMap setup / check failed.")
 
-    # 8. mask_to_mesh C++ binary
-    if not compile_mask_to_mesh(paths):
-        _abort("mask_to_mesh is not available. Pipeline will not start.")
+    # 8. C++ tools (mask_to_mesh + extract_attachments) – unified build
+    if not compile_cpp_tools(paths):
+        _abort("C++ tools are not available. Pipeline will not start.")
 
-    # 9. extract_attachments C++ binary
-    if not compile_extract_attachments(paths):
-        _abort("extract_attachments is not available. Pipeline will not start.")
-
-    # 10. Input format
+    # 9. Input format
     if not user_settings.get("input_format"):
         user_settings["input_format"] = _ask_input_format()
 
-    # 11. Persist state once (not scattered across the function)
+    # 10. Persist state once (not scattered across the function)
     save_config(config, C.MAIN_CONFIG_PATH)
 
     print_section("MSK-PIPE Pre-flight completed.")
 
-    # 12. Hand off to pipeline runner
+    # 11. Hand off to pipeline runner
     run_pipeline(user_settings, config)
 
 

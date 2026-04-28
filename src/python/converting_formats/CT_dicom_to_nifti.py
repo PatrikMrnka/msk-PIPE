@@ -1,3 +1,18 @@
+"""
+CT_dicom_to_nifti.py
+~~~~~~~~~~~~~~~~~~~~
+Convert a DICOM series to NIfTI.
+
+Scans the given directory for DICOM files, identifies series, and converts
+the selected series (first by default) to NIfTI (.nii.gz). SimpleITK
+automatically handles the spatial transform (pixel spacing, slice thickness,
+origin, and orientation).
+
+Usage
+-----
+    python CT_dicom_to_nifti.py ./data/dicom_folder -o ./result/ct.nii.gz
+"""
+
 import argparse
 import sys
 import pathlib
@@ -9,20 +24,7 @@ from runner.ui import print_info, print_success, print_warning, print_error, pri
 
 
 def main():
-    """CLI entry point for converting a DICOM series to NIfTI.
-
-    Scans the given directory for DICOM files, identifies series, and converts
-    the selected series (first by default) to NIfTI (.nii.gz). SimpleITK
-    automatically handles the spatial transform (pixel spacing, slice thickness,
-    origin, and orientation).
-
-    Example:
-        python ct_to_nifti_dicom.py ./data/dicom_folder -o ./result/ct.nii.gz
-
-    Exit codes:
-        0  on success,
-        >0 on input errors or missing data.
-    """
+    """CLI entry point for converting a DICOM series to NIfTI."""
     ap = argparse.ArgumentParser(
         description="Convert a DICOM folder to a NIfTI volume (.nii.gz)."
     )

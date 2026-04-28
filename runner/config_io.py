@@ -17,7 +17,7 @@ def load_config(path: Path) -> dict:
         "snakemake_env": {},
         "paths": {
             "muscle_wrapping_path": str(C.MUSCLE_WRAPPING_DEFAULT),
-            "mask_to_mesh_path": str(C.MASK_TO_MESH_DEFAULT_DIR.resolve()),
+            "cpp_tools_path": str(C.CPP_TOOLS_DEFAULT_DIR.resolve()),
         },
     }
     if not path.exists():
@@ -33,7 +33,7 @@ def load_config(path: Path) -> dict:
                 "muscle_wrapping_path", str(C.MUSCLE_WRAPPING_DEFAULT)
             )
             data["paths"].setdefault(
-                "mask_to_mesh_path", str(C.MASK_TO_MESH_DEFAULT_DIR.resolve())
+                "cpp_tools_path", str(C.CPP_TOOLS_DEFAULT_DIR.resolve())
             )
             print_success("Existing config.json loaded.")
             return data

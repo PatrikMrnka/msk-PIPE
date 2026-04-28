@@ -102,12 +102,12 @@ def musclemap_env_name():
 def mask_to_mesh_bin():
     """Return the platform-appropriate path to the mask_to_mesh binary."""
     if os.name == "nt":
-        return "src/cpp/mask_to_mesh/build/Release/mask_to_mesh.exe"
-    return "src/cpp/mask_to_mesh/build/mask_to_mesh"
+        return "src/cpp/build/bin/Release/mask_to_mesh.exe"
+    return "src/cpp/build/bin/mask_to_mesh"
 
 
 def extract_attachments_bin():
     """Return the platform-appropriate path to the extract_attachments binary."""
     if os.name == "nt":
-        return "src/cpp/extract_attachments/build/Release/extract_attachments.exe"
-    return "src/cpp/extract_attachments/build/extract_attachments"
+        return "src/cpp/build/bin/Release/extract_attachments.exe"
+    return "src/cpp/build/bin/extract_attachments"

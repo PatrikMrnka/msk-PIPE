@@ -1,5 +1,7 @@
 """
-clean_mesh.py - Validate and clean a single 3D mesh (OBJ/STL) in place.
+clean_mesh.py
+~~~~~~~~~~~~~
+Validate and clean a single 3D mesh (OBJ/STL) in place.
 
 The script is invoked per-file so that Snakemake can parallelise cleaning.
 It performs the following validations / fixes using `trimesh`:
@@ -12,8 +14,13 @@ It performs the following validations / fixes using `trimesh`:
     6. Non-manifold edges            -> reported (edge shared by > 2 faces)
     7. Non-manifold vertices         -> reported (fan connectivity check)
 
-All edits are written back to the same path (in place).  A JSON-like stats
+All edits are written back to the same path (in place). A JSON-like stats
 line is printed to stdout so Snakemake logs remain auditable.
+
+Usage
+-----
+    python clean_mesh.py \
+        --input data/temp/mesh.obj
 """
 
 from __future__ import annotations
@@ -27,7 +34,6 @@ from typing import Tuple
 import numpy as np
 import trimesh
 
-# Pipeline-wide coloured helpers (optional - fall back to print if unavailable).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 try:
     from runner.ui import print_error, print_info, print_step, print_success, print_warning

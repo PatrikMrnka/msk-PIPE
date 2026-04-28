@@ -42,8 +42,7 @@ STAPLE_REPO_URL = "https://github.com/modenaxe/msk-STAPLE.git"
 STAPLE_DEFAULT_DIR = SRC_DIR / "STAPLE"
 
 
-MASK_TO_MESH_DEFAULT_DIR = SRC_DIR / "cpp" / "mask_to_mesh"
-EXTRACT_ATTACHMENTS_DEFAULT_DIR = SRC_DIR / "cpp" / "extract_attachments"
+CPP_TOOLS_DEFAULT_DIR = SRC_DIR / "cpp"
 MUSCLE_WRAPPING_DEFAULT = SRC_DIR / "MW2" / "Build"
 
 # ── Python executable inside a conda env ──────────────────────────────────────

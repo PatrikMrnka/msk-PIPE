@@ -2,10 +2,9 @@
 external_tools.py – Checks and builds external binary / library dependencies.
 
 Contains three independent checks, each focused on a single third-party tool:
-  - check_muscle_wrapping        → verifies Muscle Wrapping 2.0 DLL
-  - find_staple                  → locates the MSK-STAPLE MATLAB toolbox
-  - compile_mask_to_mesh         → ensures the mask_to_mesh C++ binary is compiled
-  - compile_extract_attachments  → ensures the extract_attachments C++ binary is compiled
+  - check_muscle_wrapping   → verifies Muscle Wrapping 2.0 DLL
+  - find_staple             → locates the MSK-STAPLE MATLAB toolbox
+  - compile_cpp_tools       → ensures mask_to_mesh & extract_attachments are compiled
 """
 
 from __future__ import annotations
@@ -180,26 +179,26 @@ def find_staple(paths: dict) -> bool:
     return False
 
 
-# ── mask_to_mesh (C++ binary) ─────────────────────────────────────────────────────
+# ── C++ tools (unified build: mask_to_mesh + extract_attachments) ──────────
 
 
-def compile_mask_to_mesh(paths: dict) -> bool:
+def compile_cpp_tools(paths: dict) -> bool:
     """
-    Ensure the mask_to_mesh binary exists.  If not, run CMake configure + build.
-    VTK is located automatically from known candidate paths, with a user
-    fallback prompt if auto-detection fails.
-    """
-    print_check("Checking mask_to_mesh (C++) binaries")
+    Ensure both C++ binaries (mask_to_mesh, extract_attachments) exist.
 
-    default_dir = Path(C.MASK_TO_MESH_DEFAULT_DIR).resolve()
-    saved = paths.get("mask_to_mesh_path")
+    Uses a single, unified CMake project rooted at ``src/cpp/`` so that VTK
+    is discovered once and runtime DLLs are copied to a shared output
+    directory instead of being duplicated per tool.
+    """
+    print_check("Checking C++ tools (mask_to_mesh, extract_attachments)")
+
+    default_dir = Path(C.CPP_TOOLS_DEFAULT_DIR).resolve()
+    saved = paths.get("cpp_tools_path")
     saved_dir = Path(saved).resolve() if saved else None
 
     def _check(path: Path) -> Path | None:
-        if _mask_to_mesh_exe(path / "Release").exists():
-            return path
         build_dir = path / "build"
-        if _mask_to_mesh_exe(build_dir).exists():
+        if _cpp_exe(build_dir, "mask_to_mesh").exists() and _cpp_exe(build_dir, "extract_attachments").exists():
             return path
         return None
 
@@ -207,25 +206,24 @@ def compile_mask_to_mesh(paths: dict) -> bool:
         if candidate is not None:
             found = _check(candidate)
             if found:
-                paths["mask_to_mesh_path"] = str(found)
-                print_success(f"mask_to_mesh binary already compiled in {found}.")
+                paths["cpp_tools_path"] = str(found)
+                print_success(f"C++ tools already compiled in {found}.")
                 return True
 
-    paths["mask_to_mesh_path"] = Prompt.ask(
-        "Enter path to mask_to_mesh directory",
+    paths["cpp_tools_path"] = Prompt.ask(
+        "Enter path to cpp tools directory",
         default=str(default_dir),
     )
 
-    mask_to_mesh_dir = Path(paths["mask_to_mesh_path"]).resolve()
-    build_dir = mask_to_mesh_dir / "build"
-    src_dir = mask_to_mesh_dir / "src"
-    exe_path = _mask_to_mesh_exe(build_dir)
+    cpp_dir = Path(paths["cpp_tools_path"]).resolve()
+    build_dir = cpp_dir / "build"
+    src_dir = cpp_dir
 
-    if exe_path.exists():
-        print_success("mask_to_mesh binary already compiled.")
+    if _check(cpp_dir):
+        print_success("C++ tools already compiled.")
         return True
 
-    print_warning("mask_to_mesh not found – starting CMake compilation...")
+    print_warning("C++ tools not found – starting CMake compilation...")
 
     if not shutil.which("cmake"):
         print_error("CMake not found in PATH. Install CMake >= 3.10.")
@@ -238,82 +236,17 @@ def compile_mask_to_mesh(paths: dict) -> bool:
     paths["vtk_path"] = str(vtk_cmake_dir)
 
     build_dir.mkdir(parents=True, exist_ok=True)
-    return _cmake_build(src_dir, build_dir, vtk_cmake_dir)
-
-
-# ── extract_attachments (C++ binary) ─────────────────────────────────────────
-
-
-def compile_extract_attachments(paths: dict) -> bool:
-    """
-    Ensure the extract_attachments binary exists.  If not, run CMake configure + build.
-    VTK is resolved via the same helper used by compile_mask_to_mesh.
-    """
-    print_check("Checking extract_attachments (C++) binary")
-
-    default_dir = Path(C.EXTRACT_ATTACHMENTS_DEFAULT_DIR).resolve()
-    saved = paths.get("extract_attachments_path")
-    saved_dir = Path(saved).resolve() if saved else None
-
-    def _check(path: Path) -> Path | None:
-        build_dir = path / "build"
-        if _extract_attachments_exe(build_dir).exists():
-            return path
-        return None
-
-    for candidate in (default_dir, saved_dir):
-        if candidate is not None:
-            found = _check(candidate)
-            if found:
-                paths["extract_attachments_path"] = str(found)
-                print_success(
-                    f"extract_attachments binary already compiled in {found}."
-                )
-                return True
-
-    paths["extract_attachments_path"] = Prompt.ask(
-        "Enter path to extract_attachments directory",
-        default=str(default_dir),
-    )
-
-    ea_dir = Path(paths["extract_attachments_path"]).resolve()
-    build_dir = ea_dir / "build"
-    src_dir = ea_dir / "src"
-    exe_path = _extract_attachments_exe(build_dir)
-
-    if exe_path.exists():
-        print_success("extract_attachments binary already compiled.")
-        return True
-
-    print_warning("extract_attachments not found – starting CMake compilation...")
-
-    if not shutil.which("cmake"):
-        print_error("CMake not found in PATH. Install CMake >= 3.10.")
-        return False
-
-    vtk_cmake_dir = _resolve_vtk(paths)
-    if vtk_cmake_dir is None:
-        return False
-
-    paths["vtk_path"] = str(vtk_cmake_dir)
-
-    build_dir.mkdir(parents=True, exist_ok=True)
-    return _cmake_build(src_dir, build_dir, vtk_cmake_dir)
+    return _cmake_build_tools(src_dir, build_dir, vtk_cmake_dir)
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 
 
-def _mask_to_mesh_exe(build_dir: Path) -> Path:
+def _cpp_exe(build_dir: Path, name: str) -> Path:
+    """Return the expected path to a compiled C++ executable."""
     if platform.system() == "Windows":
-        return build_dir / "Release" / "mask_to_mesh.exe"
-    return build_dir / "mask_to_mesh"
-
-
-def _extract_attachments_exe(build_dir: Path) -> Path:
-    if platform.system() == "Windows":
-        return build_dir / "Release" / "extract_attachments.exe"
-    return build_dir / "extract_attachments"
+        return build_dir / "bin" / "Release" / f"{name}.exe"
+    return build_dir / "bin" / name
 
 
 def _vtk_cmake_dir(base: Path) -> Path | None:
@@ -375,7 +308,7 @@ def _resolve_vtk(paths: dict) -> Path | None:
     return found
 
 
-def _cmake_build(src_dir: Path, build_dir: Path, vtk_cmake_dir: Path) -> bool:
+def _cmake_build_tools(src_dir: Path, build_dir: Path, vtk_cmake_dir: Path) -> bool:
     """Run CMake configure then build. Returns True on success."""
     print_info(f"Running CMake with VTK_DIR={vtk_cmake_dir} ...")
 
@@ -396,7 +329,7 @@ def _cmake_build(src_dir: Path, build_dir: Path, vtk_cmake_dir: Path) -> bool:
         return False
 
     print_success("CMake configuration successful.")
-    print_info("Building mask_to_mesh...")
+    print_info("Building C++ tools...")
 
     build = subprocess.run(
         ["cmake", "--build", str(build_dir), "--config", "Release"],
@@ -404,10 +337,10 @@ def _cmake_build(src_dir: Path, build_dir: Path, vtk_cmake_dir: Path) -> bool:
         text=True,
     )
     if build.returncode == 0:
-        print_success("mask_to_mesh compiled successfully.")
+        print_success("C++ tools compiled successfully.")
         return True
 
-    print_error("mask_to_mesh build step failed.")
+    print_error("C++ tools build step failed.")
     return False
 
 def _clone_staple(dest: Path) -> bool:

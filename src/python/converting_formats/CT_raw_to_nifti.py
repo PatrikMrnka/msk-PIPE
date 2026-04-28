@@ -1,14 +1,17 @@
 """
-CT_raw_to_nifti.py -- Convert a RAW CT volume to NIfTI using Z coordinates.
+CT_raw_to_nifti.py
+~~~~~~~~~~~~~~~~~~
+Convert a RAW CT volume to NIfTI using Z coordinates.
 
 Reads a flat binary file (.raw) together with a Z-coordinate text file,
 constructs the proper affine matrix, and writes a NIfTI (.nii.gz) volume.
 
 When the Z spacing is non-uniform the user can choose to:
-  - ``--allow-nonuniform``: save with the mean dz (small positional error),
-  - ``--resample-dz <mm>``: resample to a uniform grid (requires SciPy).
+  - `--allow-nonuniform`: save with the mean dz (small positional error),
+  - `--resample-dz <mm>`: resample to a uniform grid (requires SciPy).
 
-Example:
+Usage
+-----
     python CT_raw_to_nifti.py ./data/ct.raw ./data/coordinates.txt -o ./result/ct.nii.gz
 """
 

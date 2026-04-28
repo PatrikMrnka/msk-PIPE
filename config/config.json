@@ -8,7 +8,7 @@
         "enable_benchmarking": true,
         "has_gpu": true,
         "input_format": "nifti",
-        "skip_preflight_checks": true,
+        "skip_preflight_checks": false,
         "snakemake_cores": "all",
         "snakemake_latency_wait": 30,
         "muscle_segmentator": "musclemap"
@@ -24,11 +24,8 @@
         "muscle_wrapping_path": "C:\\msk_pipe\\src\\MW2\\Build",
         "staple_path": "src\\STAPLE",
         "vtk_path": "C:\\msk_pipe\\src\\MW2\\Build\\ExternalLibs\\VTK\\Bin\\lib\\cmake\\vtk-9.4",
-        "input_path": "C:\\msk_pipe\\data\\input\\ct\\ct.nii.gz"
-    },
-    "snakemake_env": {
-        "totalseg": "env_totalseg_gpu.yaml",
-        "musclemap": "env_musclemap_gpu.yaml"
+        "input_path": "C:\\msk_pipe\\data\\input\\ct\\ct.nii.gz",
+        "cpp_tools_path": "C:\\msk_pipe\\src\\cpp"
     },
     "totalsegmentator": {
         "fast": false,
@@ -48,7 +45,7 @@
         "passband": 0.01
     },
     "muscle_preprocessing": {
-        "min_voxels": 2000,
+        "min_voxels": 5000,
         "opening_kernel": 1,
         "closing_kernel": 1,
         "fill_holes": true,
@@ -56,18 +53,20 @@
         "bone_subtraction_dilation_radius": 0
     },
     "muscle_to_mesh": {
-        "smooth_iterations": 25,
+        "smooth_iterations": 30,
         "passband": 0.01
     },
     "attachment_extraction": {
-        "method": "atlas_registration",
+        "method": "atlas_based",
         "lhdl_bones_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\bones",
         "lhdl_muscles_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\muscles",
         "threshold_mm": 4.0,
-        "clip_fraction": 0.22
+        "clip_fraction": 0.25
     },
     "muscle_wrapping": {
-        "kinematics_algorithm": "havlicek"
+        "kinematics_algorithm": "luca",
+        "num_lines": 100,
+        "line_res": 15
     },
     "muscle_map_backup": {
         "default_model": "default",
@@ -132,5 +131,9 @@
         "msk_totalseg_cpu": "c802bebc4368c3dcf43bb7696c32d92bc4525446b21c53c2be6645de1ace0aa4",
         "msk_totalseg_gpu": "e94ef527d425bf8026dab45e98cea5003200c6dacac4bfdd44e51024ee8a5045",
         "msk_musclemap_gpu": "955f2032a8f4c20ad6c52ae6651bd0dbb6f6e317945a00b8bfddb89788683557"
+    },
+    "snakemake_env": {
+        "totalseg": "env_totalseg_gpu.yaml",
+        "musclemap": "env_musclemap_gpu.yaml"
     }
 }

@@ -1,4 +1,14 @@
-"""Generic mesh merging CLI."""
+"""
+merge_mesh.py
+~~~~~~~~~~~~~
+Generic mesh merging CLI.
+
+Usage
+-----
+    python merge_mesh.py \
+        --input-meshes mesh1.obj mesh2.obj \
+        --output-mesh merged.obj
+"""
 
 import argparse
 import sys

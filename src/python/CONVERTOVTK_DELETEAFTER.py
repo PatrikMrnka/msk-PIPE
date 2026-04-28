@@ -1,3 +1,15 @@
+"""
+CONVERTOVTK_DELETEAFTER.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Convert one STL/OBJ mesh into a legacy VTK file.
+
+Usage
+-----
+    python CONVERTOVTK_DELETEAFTER.py \
+        --input mesh.obj \
+        --output mesh.vtk
+"""
+
 from __future__ import annotations
 
 import argparse

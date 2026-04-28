@@ -1,13 +1,22 @@
 """
-clean_masks.py — Binary mask post-processing for NIfTI segmentation files.
+clean_masks.py
+~~~~~~~~~~~~~~
+Binary mask post-processing for NIfTI segmentation files.
 
 Processing pipeline per mask:
-    1. Binarize with threshold `iso`  (values >= iso → 0, else → 1)
+    1. Binarize with threshold `iso` (values >= iso -> 0, else -> 1)
     2. Connected-component analysis; discard small / unwanted components
     3. Optional morphological closing then opening
     4. Optional iterative hole filling
 
 Multiple files are processed in parallel (--workers flag).
+
+Usage
+-----
+    python clean_masks.py \
+        --input-dir data/temp/masks_in \
+        --output-dir data/temp/masks_out \
+        -- ... filters
 """
 
 import argparse
@@ -50,7 +59,7 @@ def _binarize(img: sitk.Image, iso: float) -> sitk.Image:
     """Threshold the image: voxels >= iso → 0 (background), else → 1 (foreground).
 
     Note: the inside/outside values are intentionally inverted relative to the
-    threshold direction — this convention is preserved from the original script.
+    threshold direction. This is because the input masks often have foreground voxels with high label values.
     """
     return sitk.BinaryThreshold(
         img,

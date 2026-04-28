@@ -133,8 +133,6 @@ msk-pipeline/
 │   └── musclemap.py               # MuscleMap repository setup
 ├── src/
 │   ├── python/
-│   │   ├── validate_inputs.py                      # Input data validation
-│   │   ├── load_image.py                           # Medical image loading
 │   │   ├── clean_masks.py                          # Mask post-processing
 │   │   ├── split_mesh.py                           # Calling mesh splitting
 │   │   ├── merge_mesh.py                           # Calling mesh merging
@@ -242,12 +240,12 @@ joint coordinate systems, assigns mass properties, and generates
 
 ### Step 8: Attachment Extraction
 Three methods available (configured via `config.json` in "attachment_extraction/method"):
-- **`proximity`** — C++ binary uses `vtkStaticCellLocator` to find muscle vertices within a configurable distance threshold of each bone surface; outputs ordered contour points as VTK point clouds.
-- **`atlas_registration`** — maps reference LHDL attachment areas onto patient-specific bone geometry using Coherent Point Drift (CPD) registration.
-- **`user_provided`** — copies user-supplied `.vtk` attachment files directly from `data/input/landmarks` folder.
+- **`proximity_based`** — C++ binary uses `vtkStaticCellLocator` to find muscle vertices within a configurable distance threshold of each bone surface; outputs ordered contour points as VTK point clouds.
+- **`atlas_based`** — maps reference LHDL attachment areas onto patient-specific bone geometry using Coherent Point Drift (CPD) registration.
+- **`own_attachments`** — copies user-supplied `.vtk` attachment files directly from `data/input/landmarks` folder.
 
 ### Step 8.1: User provided attachments
-If the `user_provided` method is selected, the names of attachment files needs to follow names from `config/muscle_topology.json` file (such as **GluteusMaximus**) and have the **_Ori** (Origin) and **_Ins** (Insertion) sufixes.
+If the `own_attachments` method is selected, the names of attachment files needs to follow names from `config/muscle_topology.json` file (such as **GluteusMaximus**) and have the **_Ori** (Origin) and **_Ins** (Insertion) sufixes.
 
 ### Step 9: XML Configuration
 Generates `setup_MuscleGeneratorTool.xml` linking the bone model, muscle meshes,
@@ -283,7 +281,7 @@ All pipeline parameters are in `config/config.json`:
 | `muscle_preprocessing.*` | | Mask cleaning parameters for muscles |
 | `bone_to_mesh.*` | | Smoothing parameters for bone meshes |
 | `muscle_to_mesh.*` | | Smoothing parameters for muscle meshes |
-| `attachment_extraction.method` | `proximity` / `atlas_registration` / `user_provided` | Attachment extraction strategy |
+| `attachment_extraction.method` | `proximity_based` / `atlas_based` / `own_attachments` | Attachment extraction strategy |
 | `attachment_extraction.threshold_mm` | `2.0` | Distance threshold (proximity method) |
 | `attachment_extraction.clip_fraction` | `0.25` | Clip fraction (proximity method) |
 | `muscle_wrapping.kinematics_algorithm` | `luca` / `havlicek` | Fibre generation algorithm |

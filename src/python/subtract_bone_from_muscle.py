@@ -1,4 +1,19 @@
-"""Subtract combined bone masks from a muscle segmentation volume."""
+"""
+subtract_bone_from_muscle.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Subtract combined bone masks from a muscle segmentation volume.
+
+Dilates the muscle mask to bridge gaps, then subtracts the bone masks to
+eliminate overlap.
+
+Usage
+-----
+    python subtract_bone_from_muscle.py \
+        --muscle-mask muscle.nii.gz \
+        --bone-mask-dir bone_masks/ \
+        --output-mask output.nii.gz \
+        --dilation-radius 1
+"""
 
 import argparse
 import sys
@@ -42,15 +57,15 @@ def subtract_bone_from_muscle(
     muscle_path: Path,
     bone_mask_dir: Path,
     output_path: Path,
-    dilation_radius: int = 0,  # Ideálně napojit na těch 2 z vašeho JSONu
+    dilation_radius: int = 0,
 ) -> None:
     """Dilate muscle to bridge gaps, then subtract bone masks to eliminate overlap."""
     muscle_img = sitk.ReadImage(str(muscle_path))
     
-    # --- ZMĚNA 1: Nafouknutí SVALU (aby překlenul mezeru) ---
+    # Dilate muscle mask to bridge gaps between muscle and bone.
     if dilation_radius > 0:
-        # Používáme GrayscaleDilate, aby se zachovalo původní vysoké ID labelu (např. 7xxx).
-        # Algoritmus vezme nejvyšší hodnotu v okolí (label) a roztáhne ji do pozadí (0).
+        # Using GrayscaleDilate to preserve original high label IDs (e.g. 7xxx).
+        # The algorithm takes the maximum value in the neighborhood (label) and dilates it into the background (0).
         muscle_img = sitk.GrayscaleDilate(muscle_img, [dilation_radius] * 3)
 
     muscle_arr = sitk.GetArrayFromImage(muscle_img)
@@ -68,12 +83,7 @@ def subtract_bone_from_muscle(
         bone_arr = _to_binary_array(bone_img)
         combined_bone = np.maximum(combined_bone, bone_arr)
 
-    # --- ZMĚNA 2: Odstraněno nafukování kosti ---
-    # Kost už nenafukujeme. Chceme ji nechat v přesné velikosti, 
-    # aby se sval kosti plynule dotkl a nezůstala tam "ochranná bublina".
-
-    # Odečteme kost od nově nafouknutého svalu
-    # (Zachováme původní labely svalu; vynulujeme pouze voxely uvnitř kosti)
+    # subtracting bone from dilated muscle - keeps original muscle labels, zeroes out voxels where bone is present
     muscle_arr[combined_bone > 0] = 0
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

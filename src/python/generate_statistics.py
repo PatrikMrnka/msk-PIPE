@@ -1,3 +1,18 @@
+"""
+generate_statistics.py
+~~~~~~~~~~~~~~~~~~~~~~
+Compare fiber lengths between PIPELINE and LHDL .sto files.
+
+Generates RMSE, correlation, and relative errors against ground-truth data,
+and produces a PDF report with time evolution and violin plots.
+
+Usage
+-----
+    python generate_statistics.py \
+        --input data/temp/results \
+        --output data/temp/results/plots
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -17,7 +32,7 @@ NAME_2 = "LHDL"
 # Time points used for violin plots.
 VIOLIN_TIMES = [0.0, 0.25, 0.5]
 
-# Fixed muscle order for violin plots.
+# muscle order for violin plots
 VIOLIN_MUSCLE_ORDER = ["Iliacus", "GluteusMaximus", "GluteusMedius", "GluteusMinimus", "AdductorBrevis", "AdductorLongus", "AdductorMagnus", "Pectineus", "VastusLateralis", "VastusMedialis"]
 VIOLIN_MUSCLES_PER_FIG = 2
 
@@ -74,7 +89,6 @@ def list_lengths_sto_files(directory: Path) -> set[str]:
         for p in directory.iterdir()
         if p.is_file() and p.suffix.lower() == ".sto" and "lengths" in p.name.lower()
     }
-
 
 def load_sto(filepath: Path) -> pd.DataFrame:
     """Load a .sto file without depending on a fixed header length."""

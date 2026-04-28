@@ -1,10 +1,26 @@
+"""
+map_lhdl_attachments.py
+~~~~~~~~~~~~~~~~~~~~~~~
+Map attachments from an LHDL template bone to a target bone using non-rigid registration.
+
+Performs point-to-plane ICP followed by CPD elastic registration to deform the
+template attachments to match the target bone geometry.
+
+Usage
+-----
+    python map_lhdl_attachments.py \
+        --lhdl-bone lhdl.obj \
+        --target-bone target.obj \
+        --lhdl-attachments att1.vtk att2.vtk \
+        --outputs out1.vtk out2.vtk
+"""
+
 import open3d as o3d
 import numpy as np
 import pyvista as pv
 from scipy.spatial import cKDTree
 from probreg import cpd
 import argparse
-import os
 
 def load_and_sample_mesh(filepath, num_points=3000):
     mesh = o3d.io.read_triangle_mesh(filepath)
@@ -40,17 +56,17 @@ def process_bone_attachments(lhdl_bone, target_bone, lhdl_attachments, outputs):
     ref_mesh, ref_pcd = load_and_sample_mesh(lhdl_bone)
     target_mesh, target_pcd = load_and_sample_mesh(target_bone)
     
-    # 1. Rigid ICP (Point-to-Plane) s rotací
+    # 1. Rigid ICP (Point-to-Plane) with rotation to align the bones in the same orientation (Z 180)
     ref_center = ref_pcd.get_center()
     target_center = target_pcd.get_center()
     
-    # Pro pelvic bones a femur/tibia můžeme potřebovat jinou výchozí rotaci (zde zanecháváme tvou Z 180)
     R_z = np.array([[-1., 0., 0.], [0., -1., 0.], [0., 0., 1.]])
     ref_pcd.rotate(R_z, center=ref_center)
     
     trans_init = np.eye(4)
     trans_init[0:3, 3] = target_center - ref_center
     
+    # using point-to-plane ICP
     reg_p2p = o3d.pipelines.registration.registration_icp(
         ref_pcd, target_pcd, 100.0, trans_init,
         o3d.pipelines.registration.TransformationEstimationPointToPlane(),
@@ -58,18 +74,21 @@ def process_bone_attachments(lhdl_bone, target_bone, lhdl_attachments, outputs):
     )
     ref_pcd.transform(reg_p2p.transformation)
     
-    # 2. Elastické CPD
+    # 2. Elastic registration (CPD) to capture non-rigid deformations between the bones, using the rigidly aligned point clouds
     original_ref_points = np.asarray(ref_pcd.points).copy()
     tf_param, _, _ = cpd.registration_cpd(source=ref_pcd, target=target_pcd, tf_type_name='nonrigid', maxiter=150)
     deformed_ref_points = tf_param.transform(original_ref_points)
     
+    # Build spatial data structures for interpolation and nearest neighbor search
     displacements = deformed_ref_points - original_ref_points
     tree_lhdl = cKDTree(original_ref_points)
     
+    # Build a KD-tree for the target bone to find nearest vertices for attachment points after deformation
     target_vertices = np.asarray(target_mesh.vertices)
     tree_target = cKDTree(target_vertices)
     
-    # 3. Zpracování všech úponů pro tuto kost v cyklu
+    # 3. Process each attachment: for each point, find the mean displacement from the 3 nearest neighbors in the deformed reference,
+    #  apply it to the original point, then snap to the nearest vertex on the target bone. Save results as legacy VTK files.
     for att_path, out_path in zip(lhdl_attachments, outputs):
         att_pcd = load_vtk_attachment(att_path)
         att_pcd.rotate(R_z, center=ref_center)
@@ -78,14 +97,15 @@ def process_bone_attachments(lhdl_bone, target_bone, lhdl_attachments, outputs):
         orig_att_pts = np.asarray(att_pcd.points)
         final_points = []
         for pt in orig_att_pts:
-            # Prostorová interpolace z deformované kosti
+            # Interpolation from deformed reference to get new position of attachment point
             _, indices = tree_lhdl.query(pt, k=3)
             mean_disp = np.mean(displacements[indices], axis=0)
             new_pt = pt + mean_disp
-            # Přisátí na .stl
+            # Snap to nearest vertex on target bone
             _, t_idx = tree_target.query(new_pt)
             final_points.append(target_vertices[t_idx])
-            
+        
+        # Save the final attachment points as legacy VTK
         final_pcd = o3d.geometry.PointCloud()
         final_pcd.points = o3d.utility.Vector3dVector(np.array(final_points))
         export_to_legacy_vtk(final_pcd, out_path)

@@ -1,3 +1,18 @@
+"""
+generate_benchmark_plots.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Generate plots from Snakemake benchmark files.
+
+Reads benchmark results from a directory and creates a comprehensive PDF report
+with time, memory, CPU, and disk usage statistics.
+
+Usage
+-----
+    python generate_benchmark_plots.py \
+        --bench-dir benchmarks/ \
+        --output report.pdf
+"""
+
 import argparse
 import os
 import pandas as pd

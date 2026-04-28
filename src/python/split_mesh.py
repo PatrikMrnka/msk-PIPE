@@ -1,4 +1,15 @@
-"""Generic mesh splitting CLI."""
+"""
+split_mesh.py
+~~~~~~~~~~~~~
+Generic mesh splitting CLI.
+
+Usage
+-----
+    python split_mesh.py \
+        --input-mesh mesh.obj \
+        --left-output left.obj \
+        --right-output right.obj
+"""
 
 import argparse
 import sys

@@ -1,4 +1,11 @@
-"""Shared mesh post-processing operations."""
+"""
+mesh_ops.py
+~~~~~~~~~~~
+Shared mesh post-processing operations.
+
+Contains utility functions for merging and splitting meshes used
+by other scripts in the pipeline.
+"""
 
 import os
 import sys
@@ -35,7 +42,6 @@ def merge_meshes(input_files, output_file):
         return False
 
     print_step("Concatenating meshes in memory...")
-    # Rychlé sloučení v paměti bez složité logiky
     merged_mesh = trimesh.util.concatenate(loaded_meshes)
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -56,7 +62,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
         return False
 
     print_step("Splitting into connected components...")
-    # Rozdělí mesh na list samostatných trimesh objektů
+    # splits the mesh into a list of separate trimesh objects, each representing a connected component
     components = mesh.split(only_watertight=False)
     
     print_info(f"Mesh count after split: {len(components)}.")
@@ -65,7 +71,7 @@ def split_into_left_right_components(input_file, left_out, right_out):
         print_warning("Not enough components to split into left/right.")
         return False
 
-    # Vypočítáme střed na ose X pro každou komponentu
+    # calculate the X coordinate of the centroid of each component to determine left vs right
     centroids_x = [comp.centroid[0] for comp in components]
     midpoint = (min(centroids_x) + max(centroids_x)) / 2.0
 
@@ -81,12 +87,12 @@ def split_into_left_right_components(input_file, left_out, right_out):
     print_info(f"Left side components: {len(left_meshes)}")
     print_info(f"Right side components: {len(right_meshes)}")
 
-    # Uložení levé strany
+    # save the left side
     if left_meshes:
         os.makedirs(os.path.dirname(left_out), exist_ok=True)
         trimesh.util.concatenate(left_meshes).export(left_out)
         
-    # Uložení pravé strany
+    # save the right side
     if right_meshes:
         os.makedirs(os.path.dirname(right_out), exist_ok=True)
         trimesh.util.concatenate(right_meshes).export(right_out)
