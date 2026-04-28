@@ -12,13 +12,13 @@
 static void print_usage(const char* prog) {
     std::cerr
         << "Usage:\n"
-    << "  " << prog << " <bone.obj> <threshold_mm> <clip_fraction>"
-           " <muscle1.obj> <out1.vtk> [<muscle2.obj> <out2.vtk> ...]\n\n"
+    << "  " << prog << " <bone.poly> <threshold_mm> <clip_fraction>"
+           " <muscle1.poly> <out1.vtk> [<muscle2.poly> <out2.vtk> ...]\n\n"
         << "Arguments:\n"
-        << "  bone.obj       Bone mesh (.obj). Locator is built ONCE.\n"
+        << "  bone.poly      Bone mesh (.obj or .stl). Locator is built ONCE.\n"
         << "  threshold_mm   Max distance in mm for attachment detection (e.g. 3.0).\n"
     << "  clip_fraction  Fraction kept at each muscle end before middle clipping (0, 0.5).\n"
-        << "  muscleN.obj    Muscle mesh (.obj) – one or more pairs.\n"
+        << "  muscleN.poly   Muscle mesh (.obj or .stl) – one or more pairs.\n"
         << "  outN.vtk       Output attachment point cloud (.vtk) for the paired muscle.\n";
 }
 

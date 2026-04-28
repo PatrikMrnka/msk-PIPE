@@ -163,7 +163,7 @@ if METHOD == "segmentation_proximity":
                 done=touch(os.path.join(OUT_DIR, "attachments", f".done_{bone}"))
             params:
                 cpp_bin=extract_attachments_bin(),
-                bone_mesh=lambda w, b=bone: os.path.join(OUT_DIR, "Geometry", f"{b}.obj") if b != "pelvis_with_sacrum" else os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.obj"),
+                bone_mesh=lambda w, b=bone: os.path.join(OUT_DIR, "Geometry", f"{b}.obj") if b != "pelvis_with_sacrum" else os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl"),
                 threshold=config.get("attachment_extraction", {}).get("threshold_mm", 1.0),
                 clip_fraction=config.get("attachment_extraction", {}).get("clip_fraction", 0.25),
                 muscle_args=" ".join([f'"{i}" "{o}"' for i, o in zip(mappings["inputs"], mappings["outputs"])])

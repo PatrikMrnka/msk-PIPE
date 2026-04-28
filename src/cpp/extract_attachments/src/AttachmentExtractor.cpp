@@ -4,8 +4,10 @@
 #include <fstream>
 #include <filesystem>
 #include <cmath>
+#include <algorithm>
 
 #include <vtkOBJReader.h>
+#include <vtkSTLReader.h>
 #include <vtkStaticCellLocator.h>
 #include <vtkGenericCell.h>
 #include <vtkPolyData.h>
@@ -20,9 +22,32 @@
 #include <vtkBox.h>
 
 // ----------------------------------------------------------------
+// Helper to read mesh based on extension
+// ----------------------------------------------------------------
+static vtkSmartPointer<vtkPolyData> read_mesh(const std::string& filepath) {
+    std::string ext = filepath.substr(filepath.find_last_of(".") + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    if (ext == "obj") {
+        auto reader = vtkSmartPointer<vtkOBJReader>::New();
+        reader->SetFileName(filepath.c_str());
+        reader->Update();
+        return reader->GetOutput();
+    } else if (ext == "stl") {
+        auto reader = vtkSmartPointer<vtkSTLReader>::New();
+        reader->SetFileName(filepath.c_str());
+        reader->Update();
+        return reader->GetOutput();
+    } else {
+        std::cerr << "[error] unsupported mesh format: " << ext << " for file: " << filepath << "\n";
+        return nullptr;
+    }
+}
+
+// ----------------------------------------------------------------
 // load_bone
 //
-// Reads the bone .obj mesh, stores it, then immediately builds the
+// Reads the bone mesh, stores it, then immediately builds the
 // vtkStaticCellLocator.  This amortises the expensive O(N log N)
 // build cost across all muscles that will be tested later.
 // ----------------------------------------------------------------
@@ -32,11 +57,7 @@ bool AttachmentExtractor::load_bone(const std::string& filepath) {
         return false;
     }
 
-    auto reader = vtkSmartPointer<vtkOBJReader>::New();
-    reader->SetFileName(filepath.c_str());
-    reader->Update();
-
-    bone_mesh_ = reader->GetOutput();
+    bone_mesh_ = read_mesh(filepath);
 
     if (!bone_mesh_ || bone_mesh_->GetNumberOfPoints() == 0) {
         std::cerr << "[error] bone mesh is empty or unreadable: " << filepath << "\n";
@@ -62,7 +83,7 @@ bool AttachmentExtractor::load_bone(const std::string& filepath) {
 // ----------------------------------------------------------------
 // load_muscle
 //
-// Reads the muscle .obj mesh and stores it.
+// Reads the muscle mesh and stores it.
 // Every vertex of the muscle will be queried in extract().
 // ----------------------------------------------------------------
 bool AttachmentExtractor::load_muscle(const std::string& filepath) {
@@ -71,11 +92,7 @@ bool AttachmentExtractor::load_muscle(const std::string& filepath) {
         return false;
     }
 
-    auto reader = vtkSmartPointer<vtkOBJReader>::New();
-    reader->SetFileName(filepath.c_str());
-    reader->Update();
-
-    muscle_mesh_ = reader->GetOutput();
+    muscle_mesh_ = read_mesh(filepath);
 
     if (!muscle_mesh_ || muscle_mesh_->GetNumberOfPoints() == 0) {
         std::cerr << "[error] muscle mesh is empty or unreadable: " << filepath << "\n";
