@@ -1,6 +1,5 @@
 // mask_to_mesh — Converts binary NIfTI masks to surface meshes (STL or OBJ).
 // Responsibilities: reading NIfTI, isosurface extraction, smoothing, writing mesh.
-// NOT responsible for file renaming; that belongs to the workflow (Snakefile).
 
 #include <vtkImageData.h>
 #include <vtkSmartPointer.h>
@@ -22,9 +21,9 @@
 
 namespace fs = std::filesystem;
 
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // CLI arguments
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 
 struct Args
 {
@@ -123,9 +122,9 @@ static std::optional<Args> parseArgs(int argc, char **argv)
     return a;
 }
 
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // String helpers
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 
 static std::string toLower(std::string s)
 {
@@ -149,9 +148,9 @@ static std::string stripNiiStem(const std::string &stem)
     return stem;
 }
 
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // VTK pipeline steps
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 
 /// Read a NIfTI image from disk.
 [[nodiscard]]
@@ -219,9 +218,9 @@ static bool writeMesh(const fs::path &outPath, vtkPolyData *pd, const std::strin
     }
 }
 
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // High-level conversion
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 
 /// Convert a single binary NIfTI mask file to a surface mesh.
 /// Output filename mirrors the input stem — renaming for downstream tools
@@ -255,9 +254,9 @@ static bool isNiftiFile(const fs::path &p)
     return endsWith(name, ".nii.gz") || endsWith(name, ".nii");
 }
 
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // Entry point
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 
 int main(int argc, char **argv)
 {

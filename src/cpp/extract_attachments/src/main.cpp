@@ -6,9 +6,11 @@
 
 #include "AttachmentExtractor.h"
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // print_usage
-// ----------------------------------------------------------------
+//
+// Display command-line usage information to stderr.
+// ────────────────────────────────────────────────────────────────────────────
 static void print_usage(const char* prog) {
     std::cerr
         << "Usage:\n"
@@ -22,9 +24,11 @@ static void print_usage(const char* prog) {
         << "  outN.vtk       Output attachment point cloud (.vtk) for the paired muscle.\n";
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // main
-// ----------------------------------------------------------------
+//
+// Entry point: orchestrates the batch processing of muscle meshes.
+// ────────────────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
     // Minimum: prog bone threshold clip_fraction muscle1 out1  => 6 args
     // Pairs of (muscle, out) must be even after the first three positional args.

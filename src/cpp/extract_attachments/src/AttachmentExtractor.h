@@ -10,22 +10,23 @@
 #include <vtkPoints.h>
 #include <vtkStaticCellLocator.h>
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // AttachmentExtractor
 //
-// Encapsulates the workflow for finding muscle-to-bone attachment
-// points via proximity queries on dense meshes.
+// Encapsulates the workflow for finding muscle-to-bone attachment points via
+// proximity queries on dense meshes.
 //
-// Optimised batch usage – load the bone ONCE, then call
-// load_muscle() / extract() / export_vtk() for every muscle:
+// Optimized batch usage: load the bone ONCE, then call load_muscle() /
+// extract() / export_vtk() for every muscle:
 //
 //   AttachmentExtractor ex;
-//   ex.load_bone("pelvis.obj");           // builds locator here
+//   ex.load_bone("pelvis.obj");            // Builds locator here
 //   for each muscle:
 //     ex.load_muscle("iliacus.obj");
-//     ex.extract(3.0);
+//     ex.extract(3.0, 0.25);
 //     ex.export_vtk("Iliacus_Ori.vtk");
-// ----------------------------------------------------------------
+//
+// ────────────────────────────────────────────────────────────────────────────
 class AttachmentExtractor {
 public:
     AttachmentExtractor() = default;

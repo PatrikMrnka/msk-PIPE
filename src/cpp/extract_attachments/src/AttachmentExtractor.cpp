@@ -21,9 +21,9 @@
 #include <vtkSplineFilter.h>
 #include <vtkBox.h>
 
-// ----------------------------------------------------------------
-// Helper to read mesh based on extension
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
+// Helper to read mesh based on file extension
+// ────────────────────────────────────────────────────────────────────────────
 static vtkSmartPointer<vtkPolyData> read_mesh(const std::string& filepath) {
     std::string ext = filepath.substr(filepath.find_last_of(".") + 1);
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -44,13 +44,13 @@ static vtkSmartPointer<vtkPolyData> read_mesh(const std::string& filepath) {
     }
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // load_bone
 //
 // Reads the bone mesh, stores it, then immediately builds the
-// vtkStaticCellLocator.  This amortises the expensive O(N log N)
-// build cost across all muscles that will be tested later.
-// ----------------------------------------------------------------
+// vtkStaticCellLocator. This amortizes the expensive O(N log N) build cost
+// across all muscles that will be tested later.
+// ────────────────────────────────────────────────────────────────────────────
 bool AttachmentExtractor::load_bone(const std::string& filepath) {
     if (!std::filesystem::exists(filepath)) {
         std::cerr << "[error] bone mesh file not found: " << filepath << "\n";
@@ -80,12 +80,12 @@ bool AttachmentExtractor::load_bone(const std::string& filepath) {
     return true;
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // load_muscle
 //
 // Reads the muscle mesh and stores it.
 // Every vertex of the muscle will be queried in extract().
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 bool AttachmentExtractor::load_muscle(const std::string& filepath) {
     if (!std::filesystem::exists(filepath)) {
         std::cerr << "[error] muscle mesh file not found: " << filepath << "\n";
@@ -105,26 +105,24 @@ bool AttachmentExtractor::load_muscle(const std::string& filepath) {
     return true;
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // extract
 //
 // Core algorithm (the locator is already built in load_bone):
 //
-// 1. Compute the distance from every muscle vertex to the nearest
-//    point on the bone surface (using the pre-built locator).
-// 2. Store the distance as a per-vertex scalar on a copy of the
-//    muscle mesh.
-// 3. Clip the muscle to keep only the region within the threshold
-//    distance (this produces the "attachment patch").
+// 1. Compute the distance from every muscle vertex to the nearest point on
+//    the bone surface (using the pre-built locator).
+// 2. Store the distance as a per-vertex scalar on a copy of the muscle mesh.
+// 3. Clip the muscle to keep only the region within the threshold distance
+//    (this produces the "attachment patch").
 // 4. Extract the boundary edges of the attachment patch.
 // 5. Order the edges into a continuous polyline contour.
-// 6. Decimate the polyline to reduce the point count.
+// 6. Smooth and uniformly resample the contour using a Spline filter.
 // 7. Select the longest contour and store its points.
 //
-// Complexity: O(M) where M = number of muscle vertices (each
-//   locator query is O(1) amortised), instead of O(M * N) brute
-//   force.
-// ----------------------------------------------------------------
+// Complexity: O(M) where M = number of muscle vertices (each locator query
+// is O(1) amortized), instead of O(M * N) brute force.
+// ────────────────────────────────────────────────────────────────────────────
 std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fraction) {
     if (!bone_mesh_ || !muscle_mesh_) {
         std::cerr << "[error] both bone and muscle meshes must be loaded before extraction\n";
@@ -178,29 +176,28 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     }
 
     // ====================================================================
-    // --- KROK 2.5: Odstranění střední části svalu (vyříznutí bříška) ---
+    // Step 2.5: Remove middle part of muscle (belly cutout)
     // ====================================================================
-    // Z - osa
-    // Získáme absolutní rozměry celého svalu
+    // Z-axis: Get absolute dimensions of the entire muscle
     double bounds[6];
-    muscle_mesh_->GetBounds(bounds); 
-    // bounds indexy: [xmin, xmax, ymin, ymax, zmin, zmax]
+    muscle_mesh_->GetBounds(bounds);
+    // bounds indices: [xmin, xmax, ymin, ymax, zmin, zmax]
     double z_min = bounds[4];
     double z_max = bounds[5];
     double z_range = z_max - z_min;
 
-    // Chceme zachovat clip_fraction nahoře a clip_fraction dole.
-    // Vše mezi tím (střed) vyřízneme.
+    // Keep clip_fraction at the top and clip_fraction at the bottom.
+    // Everything in between (center) will be removed.
 
-    // Vytvoříme virtuální 3D box, který reprezentuje střed svalu.
-    // Pro osy X a Y nastavíme obrovský přesah, abychom ořezávali čistě jen podle výšky Z.
+    // Create a virtual 3D box representing the center of the muscle.
+    // For X and Y axes, set a huge margin so we clip purely by Z height.
     double box_bounds[6];
-    box_bounds[0] = bounds[0] - 1000.0; 
+    box_bounds[0] = bounds[0] - 1000.0;
     box_bounds[1] = bounds[1] + 1000.0;
-    box_bounds[2] = bounds[2] - 1000.0; 
+    box_bounds[2] = bounds[2] - 1000.0;
     box_bounds[3] = bounds[3] + 1000.0;
-    box_bounds[4] = z_min + (clip_fraction * z_range); // Spodní hranice řezu
-    box_bounds[5] = z_max - (clip_fraction * z_range); // Horní hranice řezu
+    box_bounds[4] = z_min + (clip_fraction * z_range);  // Lower clipping boundary
+    box_bounds[5] = z_max - (clip_fraction * z_range);  // Upper clipping boundary
 
     auto box = vtkSmartPointer<vtkBox>::New();
     box->SetBounds(box_bounds);
@@ -208,18 +205,18 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     auto box_clipper = vtkSmartPointer<vtkClipPolyData>::New();
     box_clipper->SetInputData(attached_patch);
     box_clipper->SetClipFunction(box);
-    
-    // vtkBox definuje prostor UVNITŘ jako záporné hodnoty.
-    // vtkClipPolyData standardně zachovává Kladné hodnoty (tj. to, co je VENKU z boxu).
-    // Výsledkem tedy budou jen ty části dotykové plochy, které leží nad nebo pod boxem.
-    box_clipper->InsideOutOff(); 
+
+    // vtkBox defines space INSIDE as negative values.
+    // vtkClipPolyData by default keeps Positive values (i.e., what is OUTSIDE the box).
+    // The result will therefore be only those parts of the contact surface that lie above or below the box.
+    box_clipper->InsideOutOff();
     box_clipper->Update();
 
-    // Přepíšeme náš patch
-    attached_patch = box_clipper->GetOutput(); 
+    // Overwrite our patch
+    attached_patch = box_clipper->GetOutput();
 
     if (attached_patch->GetNumberOfPoints() == 0) {
-        std::cerr << "[warning] Po vyriznuti stredu svalu nezbyly zadne body uponu.\n";
+        std::cerr << "[warning] After cutting the middle of the muscle, no attachment points remained.\n";
         return 0;
     }
     // ====================================================================
@@ -233,7 +230,7 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     edges->ManifoldEdgesOff();
     edges->Update();
 
- // 4. Seřazení rozházených hran do plynulé kontury (polyline)
+    // 4. Order scattered edges into a continuous contour (polyline).
     auto stripper = vtkSmartPointer<vtkStripper>::New();
     stripper->SetInputConnection(edges->GetOutputPort());
     stripper->Update();
@@ -245,7 +242,7 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
         return 0;
     }
 
-    // 5. Nalezení nejdelší kontury (eliminace drobných artefaktů)
+    // 5. Find the longest contour (eliminate minor artifacts).
     vtkIdType max_points = 0;
     const vtkIdType* best_pts = nullptr;
     vtkIdType npts;
@@ -260,19 +257,19 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     }
 
     if (max_points < 3 || best_pts == nullptr) {
-        return 0; // Příliš malá kontura
+        return 0;  // Contour too small
     }
 
-    // Vytvoření samostatného PolyData pouze s tou nejdelší linií
+    // Create a standalone PolyData with only the longest line.
     auto singleLine = vtkSmartPointer<vtkPolyData>::New();
     singleLine->SetPoints(boundary->GetPoints());
     auto cellArray = vtkSmartPointer<vtkCellArray>::New();
     cellArray->InsertNextCell(max_points, best_pts);
     singleLine->SetLines(cellArray);
 
-    // 6. Vyhlazení a ROVNOMĚRNÉ převzorkování kontury pomocí Spline filtru
-    // Místo decimace (která ničí rozestupy) vytvoříme plynulou křivku.
-    int desired_points = 30; // Počet bodů, které definují finální úpon (lze parametrizovat)
+    // 6. Smooth and uniformly resample the contour using a Spline filter.
+    // Instead of decimation (which destroys spacing), create a smooth curve.
+    int desired_points = 30;  // Number of points defining the final attachment (can be parameterized)
     
     auto splineFilter = vtkSmartPointer<vtkSplineFilter>::New();
     splineFilter->SetInputData(singleLine);
@@ -287,8 +284,8 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     for (vtkIdType i = 0; i < num_smooth_points; ++i) {
         double pt[3], closest_point[3];
         smoothLine->GetPoint(i, pt);
-        
-        // Použití již předpočítaného lokátoru kosti
+
+        // Use the pre-computed bone locator.
         locator_->FindClosestPoint(pt, closest_point, generic_cell, cell_id, sub_id, dist2);
         
         attachment_points_->InsertNextPoint(closest_point);
@@ -300,12 +297,12 @@ std::size_t AttachmentExtractor::extract(double max_distance_mm, double clip_fra
     return count;
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // export_vtk
 //
-// Writes attachment points to a legacy ASCII VTK 3.0 file that is
-// compatible with OpenSim MuscleGeneratorTool.
-// ----------------------------------------------------------------
+// Writes attachment points to a legacy ASCII VTK 3.0 file that is compatible
+// with OpenSim MuscleGeneratorTool.
+// ────────────────────────────────────────────────────────────────────────────
 bool AttachmentExtractor::export_vtk(const std::string& output_path) const {
     if (!attachment_points_ || attachment_points_->GetNumberOfPoints() == 0) {
         std::cerr << "[warning] no attachment points to export\n";
@@ -371,9 +368,9 @@ bool AttachmentExtractor::export_vtk(const std::string& output_path) const {
     return true;
 }
 
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 // attachment_point_count
-// ----------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
 std::size_t AttachmentExtractor::attachment_point_count() const {
     if (!attachment_points_) return 0;
     return static_cast<std::size_t>(attachment_points_->GetNumberOfPoints());
