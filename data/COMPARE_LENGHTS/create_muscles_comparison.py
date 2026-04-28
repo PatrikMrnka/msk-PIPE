@@ -5,11 +5,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = Path(__file__).resolve().parent
 SOURCE_FOLDERS = [
-    "TEST_LHDL_LUCA_ATLAS_BASED",
-    "TEST_LHDL_LUCA_OWN",
-    "TEST_LHDL_LUCA_PROXIMITY_BASED_4mm",
+    "TEST_LHDL_HAVLICEK_ATLAS_BASED",
+    "TEST_LHDL_HAVLICEK_OWN_ATTACHMENTS",
+    "TEST_LHDL_HAVLICEK_PROXIMITY_BASED_4mm",
 ]
-OUTPUT_FOLDER = "MUSCLES_COMPARISON"
+OUTPUT_FOLDER = "MUSCLES_COMPARISON_HAVLICEK"
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 LABEL_FONT_SIZE = 108
 
@@ -103,7 +103,7 @@ def build_comparison_image(image_paths: list[Path | None], labels: list[str], ou
                 outline="#888888",
                 width=2,
             )
-            missing_text = "NOT EXISTING"
+            missing_text = "Žádná data."
             missing_bbox = draw.textbbox((0, 0), missing_text, font=font)
             missing_width = missing_bbox[2] - missing_bbox[0]
             missing_height = missing_bbox[3] - missing_bbox[1]

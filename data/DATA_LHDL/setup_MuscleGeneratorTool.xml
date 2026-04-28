@@ -350,37 +350,31 @@
 
     <!-- Specify the algorithm to use for muscle mesh deformation  -->
 
-	<!-- <kinematics_fibre_algorithm> -->
-		<!-- <Havlicek2024XPBDAlgorithm> -->
-		<!-- </Havlicek2024XPBDAlgorithm> -->
-	<!-- </kinematics_fibre_algorithm> -->
-    <!-- <!-- <kinematics_fibre_algorithm> --> -->
-		<!-- <!-- <Havlicek2024XPBDAlgorithm>	 --> -->
-
-			<!-- <!-- <joint_interaction_information> --> -->
-				<!-- <!-- <!-- Information describing the interactions of a joint under various angles. --> --> -->
-				<!-- <!-- <JointInteractionInformation name="hip_r"> --> -->
-					<!-- <!-- <body>femur_r</body> --> -->
-					<!-- <!-- <!-- The position of the physiological joint centre. --> --> -->
-					<!-- <!-- <centre>143.797	243.457 -432.585</centre> --> -->
-					<!-- <!-- <!-- The orientation of the physiological joint centre. --> --> -->
-					<!-- <!-- <orientation>-0.3626 -1.5127 -2.0524</orientation> --> -->
-					<!-- <!-- <!-- Scale factors of the centre coordinates in X, Y, Z directions respectively. --> --> -->
-					<!-- <!-- <scale_factors>0.001 0.001 0.001</scale_factors> --> -->
-					<!-- <!-- <!-- Muscles involved for the movements of this joint. --> --> -->
-					<!-- <!-- <muscles_involved> --> -->
-						<!-- <!-- GluteusMaximus GluteusMedius GluteusMinimus Piriformis  --> -->
-						<!-- <!-- Sartorius TensorFasciaLatae Gracialis Iliacus Pectineus  --> -->
-						<!-- <!-- Psoas Semitendinosus Semimembranosus BicepsFemoris  --> -->
-						<!-- <!-- RectusFemoris AdductorMagnus AdductorLongus AdductorBrevis --> -->
-					<!-- <!-- </muscles_involved> --> -->
-					<!-- <!-- <!-- A .sto file containing the activations of muscles for various angles. --> --> -->
-					<!-- <!-- <muscle_activations_file>hip_activations.sto</muscle_activations_file> --> -->
-				<!-- <!-- </JointInteractionInformation> --> -->
-			<!-- <!-- </joint_interaction_information> --> -->
-	<!-- <!-- </Havlicek2024XPBDAlgorithm> --> -->
-
-   <!-- <!-- </kinematics_fibre_algorithm> --> -->
+	<kinematics_fibre_algorithm>
+		<Havlicek2024XPBDAlgorithm>	
+			<joint_interaction_information>
+				<!-- Information describing the interactions of a joint under various angles. -->
+				<JointInteractionInformation name="hip_r">
+					<body>femur_r</body>
+					<!-- The position of the physiological joint centre. -->
+					<centre>143.797	243.457 -432.585</centre>
+					<!-- The orientation of the physiological joint centre. -->
+					<orientation>-0.3626 -1.5127 -2.0524</orientation>
+					<!-- Scale factors of the centre coordinates in X, Y, Z directions respectively. -->
+					<scale_factors>0.001 0.001 0.001</scale_factors>
+					<!-- Muscles involved for the movements of this joint. -->
+					<muscles_involved>
+						GluteusMaximus GluteusMedius GluteusMinimus Piriformis 
+						Sartorius TensorFasciaLatae Gracialis Iliacus Pectineus 
+						Psoas Semitendinosus Semimembranosus BicepsFemoris 
+						RectusFemoris AdductorMagnus AdductorLongus AdductorBrevis
+					</muscles_involved>
+					<!-- A .sto file containing the activations of muscles for various angles. -->
+					<muscle_activations_file>hip_activations.sto</muscle_activations_file>
+				</JointInteractionInformation>
+			</joint_interaction_information>
+		</Havlicek2024XPBDAlgorithm>
+   </kinematics_fibre_algorithm>
 
   </MuscleGeneratorTool>
 </OpenSimDocument>
