@@ -246,12 +246,12 @@ def run_statistics(pipeline_dir: Path, lhdl_dir: Path, output_dir: Path) -> int:
                 ax_time.fill_between(t, m - s, m + s, color=color, alpha=0.2)
 
             ax_time.set_title(
-                f"Muscle: {muscle_name}\n"
-                f"RMSE: {rmse * 1000:.2f} mm | Correlation: {corr:.3f}\n"
-                f"Error vs mean length: {rel_rmse_mean_pct:.2f} % | Error vs range of motion: {rel_rmse_range_pct:.2f} %"
+                f"Sval: {muscle_name}\n"
+                f"RMSE: {rmse * 1000:.2f} mm | Korelace: {corr:.3f}\n"
+                f"Chyba k průměrné délce: {rel_rmse_mean_pct:.2f} % | Chyba k rozsahu pohybu: {rel_rmse_range_pct:.2f} %"
             )
-            ax_time.set_xlabel("Time (s)")
-            ax_time.set_ylabel("Fiber length (m)")
+            ax_time.set_xlabel("Čas (s)")
+            ax_time.set_ylabel("Délka vláken (m)")
             ax_time.grid(True, linestyle="--", alpha=0.6)
             ax_time.legend(loc="upper left")
 
@@ -279,11 +279,11 @@ def run_statistics(pipeline_dir: Path, lhdl_dir: Path, output_dir: Path) -> int:
                             palette={NAME_1: "#1f77b4", NAME_2: "#ff7f0e"},
                             ax=ax_v,
                         )
-                        ax_v.set_title(f"Time: {time_val} s")
+                        ax_v.set_title(f"Čas: {time_val} s")
                         ax_v.set_xlabel("")
                         ax_v.set_xticks([]) # Hide the repeated muscle label.
                         if i == 0:
-                            ax_v.set_ylabel("Fiber length (m)")
+                            ax_v.set_ylabel("Délka vláken (m)")
                         else:
                             ax_v.set_ylabel("")
 

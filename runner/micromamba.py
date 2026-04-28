@@ -118,10 +118,14 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
             action = "updated"
         else:
             print_success(f"'{env_name}' is up-to-date.")
+            if env_name == "msk_base":
+                patch_snakemake_benchmark(env_path)
             continue
 
         if result.returncode == 0:
             print_success(f"'{env_name}' {action} successfully.")
+            if env_name == "msk_base":
+                patch_snakemake_benchmark(env_path)
         else:
             print_error(f"Error ({action}) '{env_name}' (code {result.returncode}):")
             if result.stderr:
@@ -130,6 +134,23 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
 
     config["env_file_hashes"] = current_hashes
     return all_ok, config
+
+
+def patch_snakemake_benchmark(env_path: Path):
+    """Automatically patch Snakemake benchmark.py on Windows to fix missing `pss` attribute."""
+    if platform.system() != "Windows":
+        return
+    site_packages = env_path / "Lib" / "site-packages"
+    benchmark_py = site_packages / "snakemake" / "benchmark.py"
+    if not benchmark_py.exists():
+        return
+    
+    content = benchmark_py.read_text(encoding="utf-8")
+    # Patch `pss += meminfo.pss` -> `pss += getattr(meminfo, "pss", 0)`
+    if 'pss += meminfo.pss' in content and 'getattr(meminfo, "pss", 0)' not in content:
+        content = content.replace('pss += meminfo.pss', 'pss += getattr(meminfo, "pss", 0)')
+        benchmark_py.write_text(content, encoding="utf-8")
+        print_success("Patched snakemake/benchmark.py (missing `pss` on Windows fix)")
 
 
 def check_micromamba(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:

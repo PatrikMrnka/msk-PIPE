@@ -82,14 +82,14 @@ MUSCLES = list(MUSCLE_LABELS)
 # ---------------------------------------------------------------------------
 # Step 8: Extract muscle-to-bone attachment points
 # ---------------------------------------------------------------------------
-METHOD = config.get("attachment_extraction", {}).get("method", "atlas_registration")
+METHOD = config.get("attachment_extraction", {}).get("method", "atlas_based")
 LHDL_BONES = config.get("attachment_extraction", {}).get("lhdl_bones_dir", "")
 LHDL_MUSCLES = config.get("attachment_extraction", {}).get("lhdl_muscles_dir", "")
 
 
 BONE_MUSCLE_MAP = {}
 for muscle_name, roles in TOPOLOGY.items():
-    if METHOD == "user_provided" and not roles.get("include_in_xml", True):
+    if METHOD == "own_attachments" and not roles.get("include_in_xml", True):
         continue
     for role in ("origin", "insertion"):
         bone_name = roles[role]
@@ -99,12 +99,12 @@ for muscle_name, roles in TOPOLOGY.items():
         suffix = "Ori" if role == "origin" else "Ins"
         out_vtk = os.path.join(OUT_DIR, "attachments", f"{muscle_name}_{suffix}.vtk")
         
-        if METHOD == "segmentation_proximity":
+        if METHOD == "proximity_based":
             in_data = os.path.join(OUT_DIR, "muscle_models", f"{roles['label']}.obj")
-        elif METHOD == "atlas_registration":
+        elif METHOD == "atlas_based":
             muscle_label = roles["label"]
             in_data = os.path.join(LHDL_MUSCLES, muscle_label, f"{muscle_name}_{suffix}.vtk")
-        elif METHOD == "user_provided":
+        elif METHOD == "own_attachments":
             in_data = os.path.join("data", "input", "landmarks", f"{muscle_name}_{suffix}.vtk")
             
         BONE_MUSCLE_MAP[bone_name]["inputs"].append(in_data)
@@ -148,7 +148,7 @@ rule all_geometry_cleaned:
         touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done")),
 
 
-if METHOD == "segmentation_proximity":
+if METHOD == "proximity_based":
     for bone, mappings in BONE_MUSCLE_MAP.items():
         rule:
             name:
@@ -174,7 +174,7 @@ if METHOD == "segmentation_proximity":
                 "{params.cpp_bin}" "{params.bone_mesh}" {params.threshold} {params.clip_fraction} {params.muscle_args}
                 """
 
-elif METHOD == "atlas_registration":
+elif METHOD == "atlas_based":
     for bone, mappings in BONE_MUSCLE_MAP.items():
         rule:
             name:
@@ -209,7 +209,7 @@ elif METHOD == "atlas_registration":
                     --outputs {output.vtks}
                 """
 
-elif METHOD == "user_provided":
+elif METHOD == "own_attachments":
     for bone, mappings in BONE_MUSCLE_MAP.items():
         rule:
             name:
