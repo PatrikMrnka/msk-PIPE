@@ -134,10 +134,21 @@ def install_musclemap_in_env(repo_path: Path, env_name: str) -> bool:
 def _clone_musclemap(dest: Path) -> bool:
     """Clone the MuscleMap repository into *dest*. Returns True on success."""
     print_info("Cloning MuscleMap repository...")
-    result = subprocess.run(
-        ["git", "clone", C.MUSCLEMAP_REPO_URL, str(dest)],
-        capture_output=True, text=True, timeout=300,
-    )
+    clone_cmd = [
+        "git", "clone", "--depth", "1", "--single-branch",
+        C.MUSCLEMAP_REPO_URL, str(dest),
+    ]
+    try:
+        result = subprocess.run(
+            clone_cmd,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+    except subprocess.TimeoutExpired:
+        print_error("Timed out while cloning MuscleMap after 30 minutes.")
+        print_warning("Check your network connection and try again.")
+        return False
     if result.returncode == 0:
         print_success("MuscleMap cloned successfully.")
         return True

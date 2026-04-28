@@ -355,10 +355,21 @@ def _clone_staple(dest: Path) -> bool:
         tmp_path = Path(tmpdir)
         
         # 1. Clone the entire repository into the temporary directory
-        result = subprocess.run(
-            ["git", "clone", C.STAPLE_REPO_URL, str(tmp_path)],
-            capture_output=True, text=True, timeout=300,
-        )
+        clone_cmd = [
+            "git", "clone", "--depth", "1", "--single-branch",
+            C.STAPLE_REPO_URL, str(tmp_path),
+        ]
+        try:
+            result = subprocess.run(
+                clone_cmd,
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+        except subprocess.TimeoutExpired:
+            print_error("Timed out while cloning MSK-STAPLE after 30 minutes.")
+            print_warning("Check your network connection and try again.")
+            return False
         
         if result.returncode != 0:
             print_error(f"Failed to clone MSK-STAPLE:\n{result.stderr}")
