@@ -73,7 +73,6 @@ def _check_opensim_api(mw_path: str) -> bool:
             try:
                 _, version, jar_path = line.split("|", 2)
                 print_success(f"OpenSim API {version.strip()} ready.")
-                print_info(f"JAR: {jar_path.strip()}")
             except ValueError:
                 print_success("OpenSim API is configured.")
             return True
