@@ -251,6 +251,35 @@ def _remove_env(env_path: Path) -> None:
         print_warning(f"Could not remove environment directory: {exc}")
 
 
+# ── TotalSegmentator licence ─────────────────────────────────────────────────
+
+TOTALSEG_LICENSE_KEY = "aca_3CHUIP91FYK5LV"
+
+
+def _set_totalseg_license(env_path: Path) -> None:
+    """Run ``totalseg_set_license`` inside *env_path* to activate the licence.
+
+    Called automatically after every successful create/update of an
+    ``msk_totalseg_*`` environment so the pipeline can run without a manual
+    activation step.
+    """
+    print_step(f"Activating TotalSegmentator licence in {env_path.name}...")
+    result = subprocess.run(
+        [str(MICROMAMBA_EXE), "run", "-p", str(env_path),
+         "totalseg_set_license", "-l", TOTALSEG_LICENSE_KEY],
+        capture_output=True,
+        text=True,
+        env=make_mamba_env(),
+    )
+    if result.returncode == 0:
+        print_success(f"TotalSegmentator licence activated in {env_path.name}.")
+    else:
+        print_warning(
+            f"Could not activate TotalSegmentator licence in {env_path.name}: "
+            + (result.stderr or result.stdout).strip()
+        )
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get_env_file_hashes(has_gpu: bool = False) -> dict[str, str | None]:
@@ -334,6 +363,8 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
             print_success(f"'{env_name}' {action} successfully.")
             if env_name == "msk_base":
                 patch_snakemake_benchmark(env_path)
+            if env_name.startswith("msk_totalseg_"):
+                _set_totalseg_license(env_path)
         else:
             # Check if this is a cache error
             error_output = result.stderr or result.stdout
@@ -355,6 +386,8 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
                                 print_success(f"'{env_name}' {action} successfully after cache clear.")
                                 if env_name == "msk_base":
                                     patch_snakemake_benchmark(env_path)
+                                if env_name.startswith("msk_totalseg_"):
+                                    _set_totalseg_license(env_path)
                             else:
                                 print_error(f"Error ({action}) '{env_name}' after cache clear (code {result.returncode}):")
                                 if result.stderr:
