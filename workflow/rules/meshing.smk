@@ -78,26 +78,27 @@ rule muscle_mask_to_obj:
 # unreferenced, non-manifold reporting) BEFORE the meshes are consumed by
 # the attachment extraction and muscle-wrapping rules.
 
-rule clean_muscle_mesh:
-    input:
-        mesh=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj"),
-    output:
-        sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "muscle_{muscle}.sentinel")),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    benchmark:
-        os.path.join(OUT_DIR, "benchmarks", "clean_muscle_mesh_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-    shell:
-        """
-        "{params.py_exe}" src/python/clean_mesh.py --input "{input.mesh}"
-        """
+# rule clean_muscle_mesh:
+#     input:
+#         mesh=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj"),
+#     output:
+#         sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "muscle_{muscle}.sentinel")),
+#     params:
+#         py_exe=get_py_exe("msk_base"),
+#     benchmark:
+#         os.path.join(OUT_DIR, "benchmarks", "clean_muscle_mesh_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+#     shell:
+#         """
+#         "{params.py_exe}" src/python/clean_mesh.py --input "{input.mesh}"
+#         """
+
 
 
 # Aggregate: all muscle meshes ready (cleaned).
 rule all_muscle_meshes:
     input:
         expand(
-            os.path.join(OUT_DIR, ".cleaned_meshes", "muscle_{muscle}.sentinel"),
+            os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj"),
             muscle=MUSCLE_LABELS,
         ),
     output:
@@ -192,16 +193,16 @@ rule split_meshes:
 # Step 6.5: Clean pelvis_with_sacrum.stl in place (before attachments)
 # ---------------------------------------------------------------------------
 
-rule clean_pelvis_with_sacrum_mesh:
-    input:
-        mesh=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl"),
-    output:
-        sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel")),
-    params:
-        py_exe=get_py_exe("msk_base"),
-    benchmark:
-        os.path.join(OUT_DIR, "benchmarks", "clean_pelvis_with_sacrum_mesh.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-    shell:
-        """
-        "{params.py_exe}" src/python/clean_mesh.py --input "{input.mesh}"
-        """
+# rule clean_pelvis_with_sacrum_mesh:
+#     input:
+#         mesh=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl"),
+#     output:
+#         sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel")),
+#     params:
+#         py_exe=get_py_exe("msk_base"),
+#     benchmark:
+#         os.path.join(OUT_DIR, "benchmarks", "clean_pelvis_with_sacrum_mesh.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+#     shell:
+#         """
+#         "{params.py_exe}" src/python/clean_mesh.py --input "{input.mesh}"
+#         """

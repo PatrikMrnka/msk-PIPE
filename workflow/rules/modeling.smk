@@ -123,27 +123,27 @@ for muscle_name, roles in TOPOLOGY.items():
 GEOMETRY_BONES = [b for b in BONE_MUSCLE_MAP.keys() if b != "pelvis_with_sacrum"]
 
 
-rule clean_geometry_mesh:
-    input:
-        geom_dir=os.path.join(OUT_DIR, "Geometry"),
-    output:
-        sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry_{geom_bone}.sentinel")),
-    params:
-        py_exe=get_py_exe("msk_base"),
-        mesh=lambda w: os.path.join(OUT_DIR, "Geometry", f"{w.geom_bone}.obj"),
-    wildcard_constraints:
-        geom_bone="|".join(GEOMETRY_BONES) if GEOMETRY_BONES else "__none__",
-    benchmark:
-        os.path.join(OUT_DIR, "benchmarks", "clean_geometry_mesh_{geom_bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-    shell:
-        """
-        "{params.py_exe}" src/python/clean_mesh.py --input "{params.mesh}"
-        """
+# rule clean_geometry_mesh:
+#     input:
+#         geom_dir=os.path.join(OUT_DIR, "Geometry"),
+#     output:
+#         sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry_{geom_bone}.sentinel")),
+#     params:
+#         py_exe=get_py_exe("msk_base"),
+#         mesh=lambda w: os.path.join(OUT_DIR, "Geometry", f"{w.geom_bone}.obj"),
+#     wildcard_constraints:
+#         geom_bone="|".join(GEOMETRY_BONES) if GEOMETRY_BONES else "__none__",
+#     benchmark:
+#         os.path.join(OUT_DIR, "benchmarks", "clean_geometry_mesh_{geom_bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+#     shell:
+#         """
+#         "{params.py_exe}" src/python/clean_mesh.py --input "{params.mesh}"
+#         """
 
 
 rule all_geometry_cleaned:
     input:
-        [os.path.join(OUT_DIR, ".cleaned_meshes", f"geometry_{b}.sentinel") for b in GEOMETRY_BONES],
+        geom_dir=os.path.join(OUT_DIR, "Geometry"),
     output:
         touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done")),
 
@@ -155,9 +155,7 @@ if METHOD == "proximity_based":
                 f"extract_attachments_{bone}"
             input:
                 geom_dir=os.path.join(OUT_DIR, "Geometry"),
-                geom_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done"),
                 pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
-                pelvis_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel") if bone == "pelvis_with_sacrum" else [],
                 muscles_done=os.path.join(OUT_DIR, "muscle_models", ".done")
             output:
                 done=touch(os.path.join(OUT_DIR, "attachments", f".done_{bone}"))
@@ -181,9 +179,7 @@ elif METHOD == "atlas_based":
                 f"extract_attachments_lhdl_{bone}"
             input:
                 geom_dir=os.path.join(OUT_DIR, "Geometry"),
-                geom_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done"),
                 pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
-                pelvis_cleaned=os.path.join(OUT_DIR, ".cleaned_meshes", "pelvis_with_sacrum.sentinel") if bone == "pelvis_with_sacrum" else [],
                 # Načítáme dynamicky všechny LHDL úpony jako závislost tohoto pravidla
                 lhdl_att=mappings["inputs"]
             output:
