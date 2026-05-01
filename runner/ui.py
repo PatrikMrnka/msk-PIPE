@@ -75,12 +75,49 @@ def print_section(title: str) -> None:
         print(f"\n--- {title} ---")
 
 
-def print_subprocess_error(stderr: str) -> None:
-    if stderr:
+from subprocess import CompletedProcess
+
+
+def print_subprocess_error(
+    proc: CompletedProcess | None = None,
+    stderr: str = "",
+    stdout: str = "",
+    returncode: int | None = None,
+) -> None:
+    """Print subprocess diagnostics.
+
+    Accepts either a CompletedProcess instance as the first argument (recommended),
+    or the legacy (stderr, stdout, returncode) parameters.
+    """
+    parts: list[str] = []
+
+    if proc is not None:
+        # Print the invoked command when available
+        try:
+            parts.append(f"Command: {' '.join(proc.args) if isinstance(proc.args, (list, tuple)) else proc.args}")
+        except Exception:
+            parts.append(f"Command: {proc.args}")
+        parts.append(f"Exit code: {proc.returncode}")
+        if proc.stdout:
+            parts.append("STDOUT:\n" + proc.stdout)
+        if proc.stderr:
+            parts.append("STDERR:\n" + proc.stderr)
+    else:
+        # Backwards-compatible path
+        if returncode is not None:
+            parts.append(f"Exit code: {returncode}")
+        if stdout:
+            parts.append("STDOUT:\n" + stdout)
+        if stderr:
+            parts.append("STDERR:\n" + stderr)
+
+    out = "\n\n".join(parts)
+
+    if out:
         if HAS_RICH:
-            console.print(f"[white]{stderr}[/white]")
+            console.print(f"[white]{out}[/white]")
         else:
-            print(stderr, file=sys.stderr)
+            print(out, file=sys.stderr)
 
 
 def print_step(msg: str) -> None:
