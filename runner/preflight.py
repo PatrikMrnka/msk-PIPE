@@ -137,10 +137,6 @@ def main(input_path: str | None = None) -> None:
     if not mw_path:
         _abort("Muscle Wrapping is not available.")
 
-    # Persist the resolved Muscle Wrapping path immediately so later failures
-    # do not discard a successful detection.
-    save_config(config, C.MAIN_CONFIG_PATH)
-
     # Expose OpenSim DLLs to PATH for MATLAB
     bin_dir = Path(mw_path) / "ExternalLibs" / "OpenSim" / "Bin" / "bin"
     if bin_dir.exists():
@@ -167,14 +163,15 @@ def main(input_path: str | None = None) -> None:
         user_settings["input_format"] = _ask_input_format()
 
     # 10. Persist state once (not scattered across the function)
-    # Mark that preflight has completed successfully so future runs can skip it
-    user_settings["skip_preflight_checks"] = True
     save_config(config, C.MAIN_CONFIG_PATH)
 
     print_section("MSK-PIPE Pre-flight completed.")
 
     # 11. Hand off to pipeline runner
     run_pipeline(user_settings, config)
+
+
+# ── __main__.py equivalent (can also live as runner/__main__.py) ──────────────
 
 if __name__ == "__main__":
     main()

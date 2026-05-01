@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import platform
 import subprocess
-import tempfile
 from pathlib import Path
 
 from rich.prompt import Confirm
 
 from . import constants as C
+from .micromamba import make_mamba_env
 from .ui import console, print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
 
 _TORCH_PACKAGES = {"torch", "torchvision", "torchaudio"}
@@ -37,6 +37,7 @@ def _micromamba_run(env_name: str, *cmd: str, timeout: int = 900) -> subprocess.
     return subprocess.run(
         ["micromamba", "run", "-p", env_path, *cmd],
         capture_output=True, text=True, timeout=timeout,
+        env=make_mamba_env(),
     )
 
 
@@ -150,6 +151,14 @@ def check_and_setup_musclemap(env_name: str) -> bool:
 
     if repo_path.is_dir():
         print_success("MuscleMap found at src/MuscleMap.")
+        
+        # Check if it is already installed before trying to install again
+        print_info(f"Checking if MuscleMap is already installed in '{env_name}'...")
+        verify = _micromamba_run(env_name, "mm_segment", "-h", timeout=120)
+        if verify.returncode == 0:
+            print_success("MuscleMap is already installed and working.")
+            return True
+            
         return install_musclemap_in_env(repo_path, env_name)
 
     print_warning("MuscleMap not found at src/MuscleMap.")

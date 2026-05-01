@@ -22,6 +22,7 @@ from rich.prompt import Confirm, Prompt
 
 from . import constants as C
 from .config_io import save_config
+from .micromamba import make_mamba_env
 from .system import terminate_process_tree
 from .ui import (
     console,
@@ -79,9 +80,8 @@ def _base_cmd(cores: str, latency_wait: int) -> list[str]:
 
 
 def _snakemake_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env["CONDA_EXE"] = str(C.MICROMAMBA_EXE)
-    return env
+    """Build the subprocess environment for all micromamba/Snakemake calls."""
+    return make_mamba_env(extra={"CONDA_EXE": str(C.MICROMAMBA_EXE)})
 
 
 def _dot_cmd() -> list[str]:
