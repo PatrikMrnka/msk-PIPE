@@ -42,7 +42,8 @@
     },
     "bone_to_mesh": {
         "smooth_iterations": 40,
-        "passband": 0.01
+        "passband": 0.01,
+        "target_reduction": 0.8
     },
     "muscle_preprocessing": {
         "min_voxels": 1000,
@@ -54,7 +55,8 @@
     },
     "muscle_to_mesh": {
         "smooth_iterations": 30,
-        "passband": 0.01
+        "passband": 0.01,
+        "target_reduction": 0.8
     },
     "attachment_extraction": {
         "method": "atlas_based",

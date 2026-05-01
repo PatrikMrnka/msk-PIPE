@@ -11,6 +11,7 @@ target_link_libraries(mask_to_mesh PRIVATE
   VTK::CommonDataModel
   VTK::FiltersCore
   VTK::FiltersGeneral
+  VTK::FiltersModeling
   VTK::FiltersSources
   VTK::IOImage
   VTK::IOGeometry

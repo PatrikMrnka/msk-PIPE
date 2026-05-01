@@ -13,6 +13,7 @@
 #include <vtkOBJWriter.h>
 #include <vtkNew.h>
 #include <vtkPolyDataConnectivityFilter.h>
+#include <vtkQuadricDecimation.h>
 
 #include <filesystem>
 #include <string>
@@ -31,9 +32,10 @@ struct Args
     fs::path    input_dir;
     fs::path    output_dir;
     int         smooth_iters     = 30;
-    double      passband         = 0.01;   // typical range: 0.005–0.02
+    double      passband         = 0.01;
     double      binary_threshold = 0.5;
-    std::string format           = "stl";  // "stl" | "obj"
+    std::string format           = "stl";
+    double      target_reduction = 0.0;   // 0.0 = disabled; 0.9 = keep 10 % polygons
 };
 
 static void usage(const char *prog)
@@ -47,7 +49,8 @@ static void usage(const char *prog)
            "  --output-dir   Directory where meshes will be written.\n"
            "  --smooth_iters Number of windowed-sinc smoothing iterations (default 30).\n"
            "  --passband     Passband for smoothing filter (default 0.01).\n"
-           "  --format       Output format: stl (default) or obj.\n";
+           "  --format       Output format: stl (default) or obj.\n"
+           "  --decimate_target  Quadric decimation reduction ratio 0.0–1.0 (default 0.0 = off).\n";
 }
 
 static std::optional<Args> parseArgs(int argc, char **argv)
@@ -102,6 +105,17 @@ static std::optional<Args> parseArgs(int argc, char **argv)
             else
             {
                 std::cerr << "[ERROR] --format must be 'stl' or 'obj', got: " << *v << "\n";
+                return {};
+            }
+        }
+        else if (arg == "--decimate_target")
+        {
+            auto v = requireNext(i, arg);
+            if (!v) return {};
+            a.target_reduction = std::stod(*v);
+            if (a.target_reduction < 0.0 || a.target_reduction >= 1.0)
+            {
+                std::cerr << "[ERROR] --decimate_target must be in [0.0, 1.0).\n";
                 return {};
             }
         }
@@ -216,6 +230,22 @@ static vtkSmartPointer<vtkPolyData> smoothMesh(vtkPolyData *pd, int iters, doubl
     return finalClean->GetOutput();
 }
 
+/// Reduce polygon count with quadric edge-collapse decimation.
+/// target_reduction in [0.0, 1.0): fraction of triangles to *remove*.
+/// Returns the input unchanged when target_reduction == 0.
+[[nodiscard]]
+static vtkSmartPointer<vtkPolyData> decimateMesh(vtkPolyData *pd, double target_reduction)
+{
+    if (target_reduction <= 0.0)
+        return pd;
+
+    vtkNew<vtkQuadricDecimation> dec;
+    dec->SetInputData(pd);
+    dec->SetTargetReduction(target_reduction);
+    dec->Update();
+    return dec->GetOutput();
+}
+
 /// Write a poly data mesh to disk in the requested format.
 [[nodiscard]]
 static bool writeMesh(const fs::path &outPath, vtkPolyData *pd, const std::string &format)
@@ -254,13 +284,14 @@ static bool convertMaskToMesh(const fs::path &inputFile,
     auto img  = readNifti(inputFile);
     auto surf = extractSurface(img, a.binary_threshold);
     auto mesh = smoothMesh(surf, a.smooth_iters, a.passband, inputFile.filename().string());
+    auto final = decimateMesh(mesh, a.target_reduction);
 
     // Preserve the original stem (strip the double-.nii extension if present)
     std::string stem = stripNiiStem(inputFile.stem().string());
     std::string ext  = (a.format == "obj") ? ".obj" : ".stl";
     fs::path    out  = outputDir / (stem + ext);
 
-    bool ok = writeMesh(out, mesh, a.format);
+    bool ok = writeMesh(out, final, a.format);
     if (!ok)
         std::cerr << "[ERROR] Failed to write: " << out.string() << "\n";
     return ok;

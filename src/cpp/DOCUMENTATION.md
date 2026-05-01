@@ -51,6 +51,7 @@ mask_to_mesh --input-dir <path> --output-dir <dir> [options]
 - `--smooth_iters N`: Windowed-sinc smoothing iterations (default: 30)
 - `--passband F`: Passband for smoothing filter (default: 0.01, range: 0.005–0.02)
 - `--format stl|obj`: Output format - STL or OBJ (default: stl)
+- `--decimate_target F`: Quadric edge-collapse decimation, fraction to remove 0.0–1.0 (default: 0.0 = off)
 
 ### Example
 
@@ -63,7 +64,8 @@ mask_to_mesh --input-dir ./masks/ --output-dir ./meshes/ --smooth_iters 30 --for
 2. **Extract Surface**: Use Flying Edges (O(N)) algorithm for isosurface extraction
 3. **Smooth & Clean**: Apply windowed-sinc smoothing and mesh cleaning
 4. **Triangulate**: Ensure all faces are triangles
-5. **Write Output**: Save as STL (binary) or OBJ format
+5. **Decimate** (optional): Reduce polygon count via quadric edge-collapse (`vtkQuadricDecimation`)
+6. **Write Output**: Save as STL (binary) or OBJ format
 
 ## Tool 2: extract_attachments
 
