@@ -42,10 +42,9 @@ def _micromamba_run(env_name: str, *cmd: str, timeout: int = 900) -> subprocess.
 
 # ── GPU-safe requirements filtering ──────────────────────────────────────────
 
-def _write_filtered_requirements(req_file: Path) -> str:
+def _remove_torch_from_requirements(req_file: Path) -> None:
     """
-    Write a temporary requirements file with torch packages removed.
-    Returns the temp file path.  Caller is responsible for cleanup.
+    Overwrite the requirements file with torch packages removed.
     """
     filtered: list[str] = []
     with open(req_file, encoding="utf-8") as f:
@@ -57,12 +56,8 @@ def _write_filtered_requirements(req_file: Path) -> str:
             if pkg not in _TORCH_PACKAGES:
                 filtered.append(raw)
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix="_musclemap_no_torch.txt",
-        delete=False, encoding="utf-8",
-    ) as tf:
+    with open(req_file, "w", encoding="utf-8") as tf:
         tf.write("\n".join(filtered) + "\n")
-        return tf.name
 
 
 # ── Installation ──────────────────────────────────────────────────────────────
@@ -89,29 +84,13 @@ def install_musclemap_in_env(repo_path: Path, env_name: str) -> bool:
             print_error(f"requirements.txt not found at {req_file}")
             return False
 
-        print_info("GPU env: installing deps without torch/torchvision/torchaudio.")
-        tmp_req = None
-        try:
-            tmp_req = _write_filtered_requirements(req_file)
-            result = _micromamba_run(env_name, "python", "-m", "pip", "install", "-r", tmp_req)
-            if result.returncode != 0:
-                print_error("MuscleMap dependency install failed.")
-                if result.stderr:
-                    print_subprocess_error(result.stderr)
-                return False
-        finally:
-            if tmp_req:
-                Path(tmp_req).unlink(missing_ok=True)
+        print_info("GPU env: removing torch from requirements.txt to respect conda pytorch-cuda.")
+        _remove_torch_from_requirements(req_file)
 
-        install_result = _micromamba_run(
-            env_name, "python", "-m", "pip", "install",
-            "-e", str(repo_path.resolve()), "--no-deps",
-        )
-    else:
-        install_result = _micromamba_run(
-            env_name, "python", "-m", "pip", "install",
-            "-e", str(repo_path.resolve()),
-        )
+    install_result = _micromamba_run(
+        env_name, "python", "-m", "pip", "install",
+        "-e", str(repo_path.resolve()),
+    )
 
     if install_result.returncode != 0:
         print_error("MuscleMap pip install failed.")

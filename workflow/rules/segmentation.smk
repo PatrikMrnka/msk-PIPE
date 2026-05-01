@@ -88,6 +88,7 @@ else:
             ),
         params:
             py_exe=lambda w: get_py_exe(musclemap_env_name()),
+            spatial_overlap=config.get("muscle_map", {}).get("spatial_overlap", 90)
         resources:
             segmentation_mutex=1,
         benchmark:
@@ -97,7 +98,7 @@ else:
             "{params.py_exe}" src/python/muscles_segmentation_extraction/run_musclemap.py \
                 {input.nii} \
                 --output-dir {output.masks_dir} \
-                --spatial-overlap 90 \
+                --spatial-overlap {params.spatial_overlap} \
                 --chunk-size auto
             """
 

@@ -19,13 +19,13 @@
     "paths": {
         "input_dir": "data/input",
         "output_dir": "data/output",
-        "extract_attachments_path": "C:\\msk_pipe\\src\\cpp\\extract_attachments",
-        "mask_to_mesh_path": "C:\\msk_pipe\\src\\cpp\\mask_to_mesh",
-        "muscle_wrapping_path": "C:\\msk_pipe\\src\\MW2\\Build",
+        "extract_attachments_path": "src/cpp/extract_attachments",
+        "mask_to_mesh_path": "src/cpp/mask_to_mesh",
+        "muscle_wrapping_path": "C:\\msk-PIPE\\src\\MW2",
         "staple_path": "src\\STAPLE",
-        "vtk_path": "C:\\msk_pipe\\src\\MW2\\Build\\ExternalLibs\\VTK\\Bin\\lib\\cmake\\vtk-9.4",
-        "input_path": "C:\\msk_pipe\\data\\input\\ct\\ct.nii.gz",
-        "cpp_tools_path": "C:\\msk_pipe\\src\\cpp"
+        "vtk_path": "src/MW2/Build/ExternalLibs/VTK/Bin/lib/cmake/vtk-9.4",
+        "input_path": "C:\\msk-PIPE\\data\\input\\ct\\ct.nii.gz",
+        "cpp_tools_path": "C:\\msk-PIPE\\src\\cpp"
     },
     "totalsegmentator": {
         "fast": false,
@@ -58,8 +58,8 @@
     },
     "attachment_extraction": {
         "method": "atlas_based",
-        "lhdl_bones_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\bones",
-        "lhdl_muscles_dir": "C:\\msk_pipe\\data\\DATA_LHDL\\muscles",
+        "lhdl_bones_dir": "data/DATA_LHDL/bones",
+        "lhdl_muscles_dir": "data/DATA_LHDL/muscles",
         "threshold_mm": 4.0,
         "clip_fraction": 0.25
     },
@@ -80,6 +80,7 @@
         }
     },
     "muscle_map": {
+        "spatial_overlap": 90,
         "default_model": "default",
         "labels": {
             "adductor_brevis_l": 7221,
