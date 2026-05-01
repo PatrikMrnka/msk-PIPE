@@ -75,6 +75,57 @@ To fix this, you must **enable Long Paths support** in Windows:
 - After STAPLE is detected or downloaded, pre-flight automatically applies a MATLAB R2023a+ compatibility patch in `GIBOC-core/SubFunctions/GeometricFun/PCRegionGrowing.m` (replaces `size(idx)` with `length(idx)` in `Pts_Out(...)`) when needed.
 - The patch step is idempotent and is skipped if the fix is already present.
 
+### Muscle Wrapping 2.0 (OsimMuscleGeneratorTool) Setup
+
+The pipeline requires the Muscle Wrapping 2.0 library to perform the final muscle-wrapping simulation. Follow these steps to build and install it:
+
+#### 1. Clone the Repository
+
+Clone the Muscle Wrapping 2.0 repository from the `MrnkaBP` branch:
+
+```bash
+git clone -b MrnkaBP https://gitlab.com/besoft/muscle-wrapping-2.0.git src/MW2/Sources
+```
+
+This clones the repository into `src/MW2/Sources` relative to your project root.
+
+#### 2. Build with CMake
+
+Navigate to the project root and run CMake configure and build. The following commands use relative paths:
+
+**Configure (CMake):**
+```bash
+cmake -B src/MW2/Build -S src/MW2/Sources `
+  -DBUILD_EXTERNAL_DEPENDENCIES=OFF `
+  -DBUILD_PIPELINE_DEPENDENCIES=ON `
+  -DBUILD_SHARED_LIBS=ON `
+  -DCMAKE_CONFIGURATION_TYPES="Debug;Release" `
+  -DCMAKE_INSTALL_PREFIX="C:/Program Files (x86)/MuscleWrapping2" `
+  -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreadedDLL" `
+  -DENABLE_OPENMP=ON `
+  -DMW2_CXX_STANDARD=20 `
+  -DOVERRIDE_INSTALL_PREFIX=ON `
+  -DPIPELINE_INSTALL_TOOLS=ON `
+  -G "Visual Studio 17 2022"
+```
+
+**Build (Release configuration with automatic parallel jobs):**
+```bash
+cmake --build src/MW2/Build --config Release -j
+```
+
+The `-j` flag without an argument automatically uses all available CPU cores for parallel compilation.
+
+#### 3. Verify the Build
+
+After successful compilation, verify that `OsimMuscleGeneratorTool.dll` exists in the build directory:
+
+```bash
+ls src/MW2/Build/bin/
+```
+
+The pipeline's pre-flight checks will automatically detect the MW2 build at `paths.muscle_wrapping_path` (configured in `config/config.json`, default: `src/MW2/Build`).
+
 ### Python Libraries (env_base)
 
 Key dependencies managed via `config/env_base.yaml`:
