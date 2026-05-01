@@ -12,6 +12,7 @@
 #include <vtkSTLWriter.h>
 #include <vtkOBJWriter.h>
 #include <vtkNew.h>
+#include <vtkPolyDataConnectivityFilter.h>
 
 #include <filesystem>
 #include <string>
@@ -176,13 +177,26 @@ static vtkSmartPointer<vtkPolyData> extractSurface(vtkImageData *img, double iso
 
 /// Smooth, clean and triangulate a surface mesh.
 [[nodiscard]]
-static vtkSmartPointer<vtkPolyData> smoothMesh(vtkPolyData *pd, int iters, double passband)
+static vtkSmartPointer<vtkPolyData> smoothMesh(vtkPolyData *pd, int iters, double passband, const std::string &filename)
 {
     vtkNew<vtkCleanPolyData> clean;
     clean->SetInputData(pd);
 
+    vtkNew<vtkPolyDataConnectivityFilter> connectivity;
     vtkNew<vtkWindowedSincPolyDataFilter> ws;
-    ws->SetInputConnection(clean->GetOutputPort());
+
+    std::string name_lower = toLower(filename);
+    if (name_lower.find("fibula") != std::string::npos || name_lower.find("tibia") != std::string::npos)
+    {
+        ws->SetInputConnection(clean->GetOutputPort());
+    }
+    else
+    {
+        connectivity->SetInputConnection(clean->GetOutputPort());
+        connectivity->SetExtractionModeToLargestRegion();
+        ws->SetInputConnection(connectivity->GetOutputPort());
+    }
+
     ws->SetNumberOfIterations(iters);
     ws->SetPassBand(passband);
     ws->BoundarySmoothingOff();
@@ -193,8 +207,13 @@ static vtkSmartPointer<vtkPolyData> smoothMesh(vtkPolyData *pd, int iters, doubl
 
     vtkNew<vtkTriangleFilter> tri;
     tri->SetInputConnection(ws->GetOutputPort());
-    tri->Update();
-    return tri->GetOutput();
+
+    vtkNew<vtkCleanPolyData> finalClean;
+    finalClean->SetInputConnection(tri->GetOutputPort());
+    finalClean->PointMergingOn();
+    finalClean->Update();
+
+    return finalClean->GetOutput();
 }
 
 /// Write a poly data mesh to disk in the requested format.
@@ -234,7 +253,7 @@ static bool convertMaskToMesh(const fs::path &inputFile,
 
     auto img  = readNifti(inputFile);
     auto surf = extractSurface(img, a.binary_threshold);
-    auto mesh = smoothMesh(surf, a.smooth_iters, a.passband);
+    auto mesh = smoothMesh(surf, a.smooth_iters, a.passband, inputFile.filename().string());
 
     // Preserve the original stem (strip the double-.nii extension if present)
     std::string stem = stripNiiStem(inputFile.stem().string());

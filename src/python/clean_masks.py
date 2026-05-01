@@ -34,19 +34,20 @@ import SimpleITK as sitk
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from runner.ui import print_info, print_success, print_warning, print_error, print_step
 
-
 # ---------------------------------------------------------------------------
 # Configuration dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CleanConfig:
     """All tunable parameters for the mask-cleaning pipeline."""
+
     iso: float = 0.5
     keep_largest: bool = True
     min_voxels: int = 2000
-    opening: int = 1            # morphological opening radius  (0 = disabled)
-    closing: int = 1            # morphological closing radius  (0 = disabled)
+    opening: int = 1  # morphological opening radius  (0 = disabled)
+    closing: int = 1  # morphological closing radius  (0 = disabled)
     fill_holes: bool = False
     fully_connected: bool = False
 
@@ -54,6 +55,7 @@ class CleanConfig:
 # ---------------------------------------------------------------------------
 # Pipeline steps  (private helpers, each does exactly one thing)
 # ---------------------------------------------------------------------------
+
 
 def _binarize(img: sitk.Image, iso: float) -> sitk.Image:
     """Threshold the image: voxels >= iso → 0 (background), else → 1 (foreground).
@@ -70,7 +72,9 @@ def _binarize(img: sitk.Image, iso: float) -> sitk.Image:
     )
 
 
-def _label_components(bin_img: sitk.Image, fully_connected: bool) -> tuple[sitk.Image, dict[int, int]]:
+def _label_components(
+    bin_img: sitk.Image, fully_connected: bool
+) -> tuple[sitk.Image, dict[int, int]]:
     """Run connected-component labelling and return (label image, {label: voxel_count})."""
     cc_filter = sitk.ConnectedComponentImageFilter()
     cc_filter.SetFullyConnected(fully_connected)
@@ -83,14 +87,20 @@ def _label_components(bin_img: sitk.Image, fully_connected: bool) -> tuple[sitk.
     return cc, sizes
 
 
-def _select_labels(sizes: dict[int, int], keep_largest: bool, min_voxels: int) -> set[int]:
-    """Return the set of component labels that should be kept."""
-    keep: set[int] = set()
+def _select_labels(
+    sizes: dict[int, int], keep_largest: bool, min_voxels: int
+) -> set[int]:
+    """Return the set of component labels that should be kept.
 
+    Modes are mutually exclusive:
+    - keep_largest=True  → retain only the single largest component.
+    - keep_largest=False → retain all components with >= min_voxels voxels.
+    """
     if keep_largest:
-        keep.add(max(sizes, key=lambda lbl: sizes[lbl]))
+        largest = max(sizes, key=lambda lbl: sizes[lbl])
+        return {largest}
 
-    keep.update(lbl for lbl, n in sizes.items() if n >= min_voxels)
+    keep = {lbl for lbl, n in sizes.items() if n >= min_voxels}
 
     # Fallback: always keep at least the largest component.
     if not keep:
@@ -104,11 +114,11 @@ def _build_mask(cc: sitk.Image, keep: set[int], reference: sitk.Image) -> sitk.I
 
     Uses np.isin for a single vectorised pass — much faster than iterative OR.
     """
-    cc_arr = sitk.GetArrayFromImage(cc)                         # shape (Z, Y, X)
+    cc_arr = sitk.GetArrayFromImage(cc)  # shape (Z, Y, X)
     mask_arr = np.isin(cc_arr, list(keep)).astype(np.uint8)
 
     mask = sitk.GetImageFromArray(mask_arr)
-    mask.CopyInformation(reference)                             # preserve spacing / origin / direction
+    mask.CopyInformation(reference)  # preserve spacing / origin / direction
     return mask
 
 
@@ -135,6 +145,7 @@ def _fill_holes(mask: sitk.Image) -> sitk.Image:
 # Main per-file entry point
 # ---------------------------------------------------------------------------
 
+
 def clean_mask_file(in_path: Path, out_path: Path, cfg: CleanConfig) -> None:
     """Load, clean, and save a single binary mask according to *cfg*.
 
@@ -152,7 +163,12 @@ def clean_mask_file(in_path: Path, out_path: Path, cfg: CleanConfig) -> None:
         sitk.WriteImage(empty, str(out_path))
         return
 
-    keep = _select_labels(sizes, cfg.keep_largest, cfg.min_voxels)
+    keep_largest = cfg.keep_largest
+    name_lower = in_path.name.lower()
+    if "fibula" in name_lower or "tibia" in name_lower:
+        keep_largest = False
+
+    keep = _select_labels(sizes, keep_largest, cfg.min_voxels)
     mask = _build_mask(cc, keep, reference=img)
     mask = _apply_morphology(mask, cfg.closing, cfg.opening)
 
@@ -166,12 +182,14 @@ def clean_mask_file(in_path: Path, out_path: Path, cfg: CleanConfig) -> None:
 # Task dataclass + worker
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CleanTask:
     """Describes a single file to process."""
+
     src: Path
     dst: Path
-    do_clean: bool      # False → just copy the file unchanged
+    do_clean: bool  # False → just copy the file unchanged
     inplace: bool
     backup_dir: Path | None
     cfg: CleanConfig
@@ -205,6 +223,7 @@ def _run_task(task: CleanTask) -> str:
 # File discovery helpers
 # ---------------------------------------------------------------------------
 
+
 def _iter_mask_files(directory: Path):
     """Yield .nii.gz files first, then .nii — both sorted alphabetically."""
     yield from sorted(directory.glob("*.nii.gz"))
@@ -224,6 +243,7 @@ def _stem(path: Path) -> str:
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
 
 def run_cleaning(
     input_dir: Path,
@@ -294,6 +314,7 @@ def _execute_tasks(tasks: list[CleanTask], workers: int) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Clean binary NIfTI masks: binarize, filter components, morphological ops."
@@ -301,42 +322,86 @@ def _build_argparser() -> argparse.ArgumentParser:
 
     # I/O -- two modes: single-file or directory
     single = p.add_argument_group("single-file mode")
-    single.add_argument("--input-file", default=None,
-                        help="Path to a single .nii / .nii.gz mask file.")
-    single.add_argument("--output-file", default=None,
-                        help="Output path for the cleaned mask (single-file mode).")
+    single.add_argument(
+        "--input-file", default=None, help="Path to a single .nii / .nii.gz mask file."
+    )
+    single.add_argument(
+        "--output-file",
+        default=None,
+        help="Output path for the cleaned mask (single-file mode).",
+    )
 
     batch = p.add_argument_group("directory (batch) mode")
-    batch.add_argument("--input-dir", default=None,
-                       help="Folder containing input .nii / .nii.gz mask files.")
-    batch.add_argument("--output-dir", default="",
-                       help="Output folder for cleaned masks (ignored with --inplace).")
-    batch.add_argument("--labels", nargs="*", default=None,
-                       help="Mask names to clean (no extension). Omit to process all files.")
-    batch.add_argument("--workers", type=int, default=4,
-                       help="Number of parallel worker processes (default: 4).")
-    batch.add_argument("--inplace", action="store_true",
-                       help="Overwrite originals; a backup is created automatically.")
+    batch.add_argument(
+        "--input-dir",
+        default=None,
+        help="Folder containing input .nii / .nii.gz mask files.",
+    )
+    batch.add_argument(
+        "--output-dir",
+        default="",
+        help="Output folder for cleaned masks (ignored with --inplace).",
+    )
+    batch.add_argument(
+        "--labels",
+        nargs="*",
+        default=None,
+        help="Mask names to clean (no extension). Omit to process all files.",
+    )
+    batch.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of parallel worker processes (default: 4).",
+    )
+    batch.add_argument(
+        "--inplace",
+        action="store_true",
+        help="Overwrite originals; a backup is created automatically.",
+    )
 
     # CleanConfig fields
-    p.add_argument("--iso",        type=float, default=0.5,
-                   help="Binarization threshold (default: 0.5).")
-    p.add_argument("--min-voxels", type=int,   default=2000,
-                   help="Minimum component size in voxels (default: 2000).")
-    p.add_argument("--opening",    type=int,   default=1,
-                   help="Morphological opening radius; 0 = disabled (default: 1).")
-    p.add_argument("--closing",    type=int,   default=1,
-                   help="Morphological closing radius; 0 = disabled (default: 1).")
+    p.add_argument(
+        "--iso", type=float, default=0.5, help="Binarization threshold (default: 0.5)."
+    )
+    p.add_argument(
+        "--min-voxels",
+        type=int,
+        default=2000,
+        help="Minimum component size in voxels (default: 2000).",
+    )
+    p.add_argument(
+        "--opening",
+        type=int,
+        default=1,
+        help="Morphological opening radius; 0 = disabled (default: 1).",
+    )
+    p.add_argument(
+        "--closing",
+        type=int,
+        default=1,
+        help="Morphological closing radius; 0 = disabled (default: 1).",
+    )
 
-    p.add_argument("--keep-largest",    dest="keep_largest", action="store_true")
-    p.add_argument("--no-keep-largest", dest="keep_largest", action="store_false",
-                   help="Do not force-keep the largest component.")
+    p.add_argument("--keep-largest", dest="keep_largest", action="store_true")
+    p.add_argument(
+        "--no-keep-largest",
+        dest="keep_largest",
+        action="store_false",
+        help="Do not force-keep the largest component.",
+    )
     p.set_defaults(keep_largest=True)
 
-    p.add_argument("--fill-holes",      action="store_true",
-                   help="Run iterative hole filling after morphological ops.")
-    p.add_argument("--fully-connected", action="store_true",
-                   help="Use 26-connectivity instead of 6-connectivity.")
+    p.add_argument(
+        "--fill-holes",
+        action="store_true",
+        help="Run iterative hole filling after morphological ops.",
+    )
+    p.add_argument(
+        "--fully-connected",
+        action="store_true",
+        help="Use 26-connectivity instead of 6-connectivity.",
+    )
 
     return p
 
