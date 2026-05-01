@@ -55,6 +55,19 @@ python -m runner [--input <file_or_dir>]
 | **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
 | **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
 
+### Known Issues & Troubleshooting
+
+**Micromamba "Package cache error" or "file is missing" on Windows**
+During environment creation, you might encounter an error like `Invalid package cache, file ... is missing` or `Package cache error`. This is typically caused by the Windows 260 character path limit when unpacking libraries with deep folder structures (like `viskores`). 
+
+To fix this, you must **enable Long Paths support** in Windows:
+1. Open PowerShell as Administrator.
+2. Run the following command:
+   ```powershell
+   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+   ```
+3. Restart your terminal or IDE (VS Code) and run the pipeline again.
+
 ### STAPLE Pre-flight Automation
 
 - During pre-flight, STAPLE is searched in `src/STAPLE` and then in `STAPLE_PATH`.

@@ -38,10 +38,188 @@ def _python_exe(env_path: Path) -> Path:
     return env_path / rel
 
 
+def _default_mamba_root_prefix() -> Path:
+    return ENVS_DIR.resolve()
+
+
+def _ensure_mamba_root_prefix() -> None:
+    if "MAMBA_ROOT_PREFIX" not in os.environ:
+        root_prefix = _default_mamba_root_prefix()
+        os.environ["MAMBA_ROOT_PREFIX"] = str(root_prefix)
+    if "MAMBA_PKGS_DIRS" not in os.environ and "CONDA_PKGS_DIRS" not in os.environ:
+        pkgs_dir = Path(os.environ["MAMBA_ROOT_PREFIX"]) / "pkgs"
+        os.environ["MAMBA_PKGS_DIRS"] = str(pkgs_dir)
+
+
 def _run_micromamba(*args: str) -> subprocess.CompletedProcess:
+    _ensure_mamba_root_prefix()
     return subprocess.run(
         ["micromamba", *args], capture_output=True, text=True
     )
+
+
+def _get_mamba_cache_dir() -> Path:
+    """Get the Micromamba/Mamba package cache directory."""
+    if "MAMBA_ROOT_PREFIX" in os.environ:
+        return Path(os.environ["MAMBA_ROOT_PREFIX"]) / "pkgs"
+    elif "CONDA_PKGS_DIRS" in os.environ:
+        return Path(os.environ["CONDA_PKGS_DIRS"].split(os.pathsep)[0])
+    else:
+        # Default: ~/.mamba/pkgs or ~/.conda/pkgs
+        home = Path.home()
+        mamba_cache = home / ".mamba" / "pkgs"
+        if mamba_cache.exists():
+            return mamba_cache
+        return home / ".conda" / "pkgs"
+
+
+def _get_all_mamba_cache_dirs() -> list[Path]:
+    """Get ALL potential Micromamba/Conda cache directories."""
+    cache_dirs = []
+    home = Path.home()
+    
+    # Check standard locations
+    candidates = [
+        home / ".mamba" / "pkgs",
+        home / ".conda" / "pkgs",
+        home / "AppData" / "Roaming" / "mamba" / "pkgs",
+        home / "AppData" / "Local" / "mamba" / "pkgs",
+    ]
+    
+    # Add environment variable locations
+    if "MAMBA_PKGS_DIRS" in os.environ:
+        for d in os.environ["MAMBA_PKGS_DIRS"].split(os.pathsep):
+            candidates.append(Path(d))
+    if "CONDA_PKGS_DIRS" in os.environ:
+        for d in os.environ["CONDA_PKGS_DIRS"].split(os.pathsep):
+            candidates.append(Path(d))
+    if "MAMBA_ROOT_PREFIX" in os.environ:
+        candidates.append(Path(os.environ["MAMBA_ROOT_PREFIX"]) / "pkgs")
+    
+    # Return only those that exist
+    for cache_dir in candidates:
+        if cache_dir.exists():
+            cache_dirs.append(cache_dir)
+    
+    return cache_dirs
+
+
+def _clear_conda_cache() -> bool:
+    """Clear the Micromamba/Conda package cache, with fallback to manual removal of all cache locations."""
+    print_info("Clearing Micromamba package cache...")
+    
+    # First attempt: use micromamba clean with force flag
+    result = _run_micromamba("clean", "--all", "-y", "--force-pkgs-dirs")
+    if result.returncode == 0:
+        print_success("Package cache cleared.")
+        return True
+    
+    print_warning("micromamba clean failed, attempting manual cache directory removal...")
+    
+    # Fallback: manually remove ALL cache directories if standard clean fails
+    all_cache_dirs = _get_all_mamba_cache_dirs()
+    
+    if not all_cache_dirs:
+        print_warning("No cache directories found")
+        return False
+    
+    all_cleared = True
+    for cache_dir in all_cache_dirs:
+        try:
+            print_info(f"Removing cache directory: {cache_dir}")
+            if cache_dir.exists():
+                def _handle_readonly(func, path, exc_info):
+                    import stat
+                    import time
+                    try:
+                        # Add \\?\ prefix to handle long paths on Windows
+                        ext_path = f"\\\\?\\{os.path.abspath(path)}" if platform.system() == "Windows" else path
+                        try:
+                            os.chmod(ext_path, stat.S_IWRITE)
+                            func(ext_path)
+                        except Exception:
+                            # Retry after a small delay to handle transient file locks
+                            time.sleep(0.1)
+                            os.chmod(ext_path, stat.S_IWRITE)
+                            func(ext_path)
+                    except Exception:
+                        pass
+                
+                # Adding \\?\ prefix for long paths
+                safe_cache_path = f"\\\\?\\{os.path.abspath(cache_dir)}" if platform.system() == "Windows" else str(cache_dir)
+                shutil.rmtree(safe_cache_path, onerror=_handle_readonly)
+                
+                if cache_dir.exists():
+                    # Fallback for Windows if shutil.rmtree completely fails
+                    if platform.system() == "Windows":
+                        empty_dir = str(cache_dir.parent / f"empty_{cache_dir.name}")
+                        os.makedirs(empty_dir, exist_ok=True)
+                        subprocess.run(["robocopy", empty_dir, str(cache_dir), "/MIR", "/R:1", "/W:1"], capture_output=True)
+                        subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", str(cache_dir)], capture_output=True)
+                        subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", empty_dir], capture_output=True)
+                
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                print_success(f"Cache cleared: {cache_dir}")
+            else:
+                print_info(f"Cache directory does not exist: {cache_dir}")
+        except Exception as exc:
+            print_warning(f"Failed to remove cache directory {cache_dir}: {exc}")
+            all_cleared = False
+    
+    return all_cleared
+
+
+def _is_cache_error(stderr: str) -> bool:
+    """Detect if the error is related to package cache corruption."""
+    return (
+        "Invalid package cache" in stderr
+        or "Cannot find a valid extracted directory cache" in stderr
+        or "Package cache error" in stderr
+        or "file is missing" in stderr
+        or "Error when extracting package" in stderr
+        or "Adresář není prázdný" in stderr 
+        or "remove_all:" in stderr
+    )
+
+
+def _remove_env(env_path: Path) -> None:
+    """Remove a partially created environment directory."""
+    if not env_path.exists():
+        return
+
+    print_info(f"Removing partially created environment at {env_path}...")
+    try:
+        def _handle_readonly(func, path, exc_info):
+            import stat
+            import time
+            try:
+                ext_path = f"\\\\?\\{os.path.abspath(path)}" if platform.system() == "Windows" else path
+                try:
+                    os.chmod(ext_path, stat.S_IWRITE)
+                    func(ext_path)
+                except Exception:
+                    time.sleep(0.1)
+                    os.chmod(ext_path, stat.S_IWRITE)
+                    func(ext_path)
+            except Exception:
+                pass
+
+        safe_env_path = f"\\\\?\\{os.path.abspath(env_path)}" if platform.system() == "Windows" else str(env_path)
+        shutil.rmtree(safe_env_path, onerror=_handle_readonly)
+
+        if env_path.exists() and platform.system() == "Windows":
+            empty_dir = str(env_path.parent / f"empty_{env_path.name}")
+            os.makedirs(empty_dir, exist_ok=True)
+            subprocess.run(["robocopy", empty_dir, str(env_path), "/MIR", "/R:1", "/W:1"], capture_output=True)
+            subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", str(env_path)], capture_output=True)
+            subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", empty_dir], capture_output=True)
+
+        if not env_path.exists():
+            print_success("Environment directory removed.")
+        else:
+            print_warning("Environment directory still exists; remove it manually.")
+    except Exception as exc:
+        print_warning(f"Could not remove environment directory: {exc}")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -96,6 +274,7 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
     previous_hashes: dict = config.get("env_file_hashes", {})
     current_hashes = get_env_file_hashes(has_gpu)
     all_ok = True
+    cache_cleared = False
 
     for env_name, yaml_path in envs.items():
         if not yaml_path.exists():
@@ -127,10 +306,45 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
             if env_name == "msk_base":
                 patch_snakemake_benchmark(env_path)
         else:
-            print_error(f"Error ({action}) '{env_name}' (code {result.returncode}):")
-            if result.stderr:
-                print_subprocess_error(result.stderr)
-            all_ok = False
+            # Check if this is a cache error
+            error_output = result.stderr or result.stdout
+            if _is_cache_error(error_output):
+                print_warning(f"Package cache error detected during {action} of '{env_name}'.")
+                
+                if not cache_cleared:
+                    if Confirm.ask("Clear package cache and retry?", default=True):
+                        _remove_env(env_path)
+                        if _clear_conda_cache():
+                            cache_cleared = True
+                            print_step(f"Retrying '{env_name}' creation...")
+                            if not env_exists:
+                                result = _run_micromamba("create", "-p", str(env_path), "-f", str(yaml_path), "-y")
+                            else:
+                                result = _run_micromamba("env", "update", "-p", str(env_path), "-f", str(yaml_path), "-y")
+                            
+                            if result.returncode == 0:
+                                print_success(f"'{env_name}' {action} successfully after cache clear.")
+                                if env_name == "msk_base":
+                                    patch_snakemake_benchmark(env_path)
+                            else:
+                                print_error(f"Error ({action}) '{env_name}' after cache clear (code {result.returncode}):")
+                                if result.stderr:
+                                    print_subprocess_error(result.stderr)
+                                all_ok = False
+                        else:
+                            all_ok = False
+                    else:
+                        all_ok = False
+                else:
+                    print_error(f"Error ({action}) '{env_name}' persists after cache clear (code {result.returncode}):")
+                    if result.stderr:
+                        print_subprocess_error(result.stderr)
+                    all_ok = False
+            else:
+                print_error(f"Error ({action}) '{env_name}' (code {result.returncode}):")
+                if result.stderr:
+                    print_subprocess_error(result.stderr)
+                all_ok = False
 
     config["env_file_hashes"] = current_hashes
     return all_ok, config
