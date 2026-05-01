@@ -11,7 +11,7 @@ Usage
     python run_musclemap.py \
         input.nii.gz \
         --output-dir output_masks/ \
-        --spatial-overlap 75
+        --spatial-overlap 90
 """
 
 import argparse
@@ -27,7 +27,7 @@ from runner.ui import print_info, print_success, print_warning, print_error, pri
 
 
 def run_musclemap(
-    input_nifti: str, output_dir: str, spatial_overlap: int = 75, chunk_size: int = 15
+    input_nifti: str, output_dir: str, spatial_overlap: int = 90, chunk_size: int = 15
 ):
     """
     Run MuscleMap segmentation.
@@ -36,6 +36,7 @@ def run_musclemap(
         input_nifti: Path to input NIfTI file (.nii.gz)
         output_dir: Output directory for masks
         spatial_overlap: Spatial overlap for sliding window inference (75-90)
+        chunk_size: Size of chunks for sliding window inference (10, 15, 20 or 'auto')
     """
 
     input_path = Path(input_nifti)

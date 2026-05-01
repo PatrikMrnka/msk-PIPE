@@ -127,9 +127,9 @@
         }
     },
     "env_file_hashes": {
-        "msk_base": "9f8ae4b981388e5fdc14c016c9f32f4cb8c1099952e5faaa847494e102c52f37",
-        "msk_totalseg_cpu": "c802bebc4368c3dcf43bb7696c32d92bc4525446b21c53c2be6645de1ace0aa4",
-        "msk_totalseg_gpu": "e94ef527d425bf8026dab45e98cea5003200c6dacac4bfdd44e51024ee8a5045",
+        "msk_base": "4767e65ae0e870cedfee1b48bc80061ef0003fbff7b95c53b42a839113822e39",
+        "msk_totalseg_cpu": "e82f26a7c32cf2d264f42365cf70aa5e49d90683a740b072bd62255e695f7365",
+        "msk_totalseg_gpu": "498584f10b27997ddc9acc2305bab92d19f6931d4c93b77ceb9a9a5067a35526",
         "msk_musclemap_gpu": "955f2032a8f4c20ad6c52ae6651bd0dbb6f6e317945a00b8bfddb89788683557"
     },
     "snakemake_env": {

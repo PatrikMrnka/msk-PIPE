@@ -128,6 +128,9 @@ def main(input_path: str | None = None) -> None:
     ok, config = check_micromamba(config, has_gpu=has_gpu)
     if not ok:
         _abort("Micromamba / environment setup failed.")
+    # Persist env hash updates immediately so they are not lost if a later
+    # preflight step fails or is interrupted.
+    save_config(config, C.MAIN_CONFIG_PATH)
 
     # 4. Muscle Wrapping 2.0
     mw_path = check_muscle_wrapping(paths)

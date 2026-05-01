@@ -51,10 +51,33 @@ def _ensure_mamba_root_prefix() -> None:
         os.environ["MAMBA_PKGS_DIRS"] = str(pkgs_dir)
 
 
-def _run_micromamba(*args: str) -> subprocess.CompletedProcess:
+def _run_micromamba(*args: str, env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     _ensure_mamba_root_prefix()
+    # Prepare environment for the subprocess so that pip (when invoked
+    # as part of an environment YAML) does not try to write into the
+    # user's global AppData cache, which can cause permission errors.
+    env = os.environ.copy()
+    # Prefer enabling a project-local pip cache to avoid using the user's
+    # global AppData cache (prevents permission errors) while keeping cache
+    # benefits for repeated installs.
+    env.setdefault("PIP_NO_CACHE_DIR", "0")
+    # Ensure pip uses a writable cache location under the mamba root prefix.
+    try:
+        root_prefix = Path(os.environ.get("MAMBA_ROOT_PREFIX", _default_mamba_root_prefix()))
+    except Exception:
+        root_prefix = _default_mamba_root_prefix()
+    pip_cache_path = root_prefix / "pip_cache"
+    try:
+        pip_cache_path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # If mkdir fails (rare), fall back to disabling cache to avoid errors.
+        env["PIP_NO_CACHE_DIR"] = "1"
+    env.setdefault("PIP_CACHE_DIR", str(pip_cache_path))
+    if env_overrides:
+        env.update(env_overrides)
+
     return subprocess.run(
-        ["micromamba", *args], capture_output=True, text=True
+        ["micromamba", *args], capture_output=True, text=True, env=env
     )
 
 

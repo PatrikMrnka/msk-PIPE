@@ -97,6 +97,7 @@ else:
             "{params.py_exe}" src/python/muscles_segmentation_extraction/run_musclemap.py \
                 {input.nii} \
                 --output-dir {output.masks_dir} \
+                --spatial-overlap 90 \
                 --chunk-size auto
             """
 
