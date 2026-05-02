@@ -29,7 +29,6 @@ BONE_STAPLE_DIR = os.path.join(OUT_DIR, "bones_STAPLE")
 # Known output labels
 # ---------------------------------------------------------------------------
 
-# Bone masks expected from TotalSegmentator (after internal renaming).
 BONE_MASKS = [
     "hip_left",
     "hip_right",
@@ -40,12 +39,33 @@ BONE_MASKS = [
     "fibula",
 ]
 
+MUSCLE_MASKS_TOTALSEGMENTATOR = [
+    "iliopsoas_left",
+    "iliopsoas_right",
+    "gluteus_maximus_left",
+    "gluteus_maximus_right",
+    "gluteus_medius_left",
+    "gluteus_medius_right",
+    "gluteus_minimus_left",
+    "gluteus_minimus_right",
+]
+
 
 # Muscle topology and labels from config/muscle_topology.json.
 with open("config/muscle_topology.json", encoding="utf-8") as f:
     TOPOLOGY = json.load(f)
 
 MUSCLE_LABELS = [roles["label"] for roles in TOPOLOGY.values()]
+
+if config.get("user_settings", {}).get("muscle_segmentator", "musclemap") == "totalsegmentator":
+    ts_supported = [
+        "iliacus_l", "iliacus_r",
+        "gluteus_maximus_l", "gluteus_maximus_r",
+        "gluteus_medius_l", "gluteus_medius_r",
+        "gluteus_minimus_l", "gluteus_minimus_r",
+    ]
+    MUSCLE_LABELS = [m for m in MUSCLE_LABELS if m in ts_supported]
+
 
 
 # ---------------------------------------------------------------------------

@@ -62,8 +62,8 @@
         "method": "atlas_based",
         "lhdl_bones_dir": "data/DATA_LHDL/bones",
         "lhdl_muscles_dir": "data/DATA_LHDL/muscles",
-        "threshold_mm": 4.0,
-        "clip_fraction": 0.25
+        "threshold_mm": 5.0,
+        "clip_fraction": 0.22
     },
     "muscle_wrapping": {
         "kinematics_algorithm": "luca",
