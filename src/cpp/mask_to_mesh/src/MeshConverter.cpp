@@ -1,8 +1,3 @@
-// MeshConverter.cpp — VTK pipeline implementation for mask_to_mesh.
-//
-// Extracted from the original monolithic main.cpp (2026-05-02) to mirror the
-// modular design used in extract_attachments/AttachmentExtractor.
-
 #include "MeshConverter.h"
 
 #include <vtkImageData.h>

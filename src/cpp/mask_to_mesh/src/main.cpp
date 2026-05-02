@@ -1,12 +1,3 @@
-// mask_to_mesh — entry point.
-//
-// Responsibilities (this file only):
-//   1. CLI argument parsing
-//   2. Output directory creation
-//   3. Iteration over input files / single-file dispatch
-//
-// All VTK pipeline logic lives in MeshConverter.{h,cpp}.
-
 #include "MeshConverter.h"
 
 #include <filesystem>

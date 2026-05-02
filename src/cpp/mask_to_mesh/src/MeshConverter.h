@@ -1,12 +1,6 @@
 #pragma once
 
 // MeshConverter — converts binary NIfTI masks to surface meshes (STL or OBJ).
-//
-// Encapsulates all VTK pipeline steps so that main.cpp only deals with CLI
-// parsing and calling convert(). The class is intentionally stateless between
-// conversions; every call to convert() is independent.
-//
-// Mirrors the design pattern established in extract_attachments/AttachmentExtractor.
 
 #include <filesystem>
 #include <string>
@@ -52,8 +46,6 @@ public:
 private:
     const MeshConverterArgs& args_;
 
-    // Pipeline steps — each returns the next stage's output.
-    // All helpers are stateless (no side-effects on *this).
     [[nodiscard]] static bool isNiftiFile(const fs::path& p);
     [[nodiscard]] static std::string stripNiiStem(const std::string& stem);
     [[nodiscard]] static std::string toLower(std::string s);
