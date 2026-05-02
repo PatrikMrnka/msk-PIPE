@@ -85,7 +85,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-This installs the minimal set of packages required by the runner (`pyyaml`, `rich`, `graphviz`). All heavy pipeline dependencies (Snakemake, PyTorch, etc.) are managed automatically inside isolated Conda environments by the runner itself.
+This installs the minimal set of packages required by the runner (`pyyaml`, `rich`). All heavy pipeline dependencies (Snakemake, PyTorch, etc.) are managed automatically inside isolated Conda environments by the runner itself.
 
 ### 3. Run the pipeline
 
