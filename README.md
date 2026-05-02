@@ -55,6 +55,56 @@ python -m runner [--input <file_or_dir>]
 | **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
 | **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
 
+## Getting Started
+
+Before running the pipeline for the first time, you need to set up the Python environment for the **runner** itself. The runner (`python -m runner`) uses your **host Python installation** (not one of the managed Conda environments), so its dependencies must be installed separately.
+
+> [!IMPORTANT]
+> The runner requires **Python 3.12**. Make sure `python --version` reports 3.12.x before proceeding.
+
+### 1. Create a virtual environment (recommended)
+
+Creating a virtual environment keeps the runner's dependencies isolated from your system Python:
+
+```powershell
+# From the project root (c:\msk-PIPE)
+python -m venv .venv
+
+# Activate the environment
+.venv\Scripts\Activate.ps1        # PowerShell
+# or
+.venv\Scripts\activate.bat         # Command Prompt
+```
+
+> [!TIP]
+> If PowerShell blocks script execution, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once and try again.
+
+### 2. Install runner dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+This installs the minimal set of packages required by the runner (`pyyaml`, `rich`, `graphviz`). All heavy pipeline dependencies (Snakemake, PyTorch, etc.) are managed automatically inside isolated Conda environments by the runner itself.
+
+### 3. Run the pipeline
+
+With the venv active, launch the runner from the project root:
+
+```powershell
+python -m runner
+```
+
+On the very first run the runner will:
+- Download and configure **Micromamba** (if not already present).
+- Create and populate all required Conda environments (`msk_base`, `msk_totalseg_gpu`, …).
+- Compile the C++ binaries (`mask_to_mesh`, `extract_attachments`).
+- Prompt for any missing configuration (input path, device, …).
+
+Subsequent runs skip already-completed setup steps and go straight to pipeline execution.
+
+---
+
 ### Known Issues & Troubleshooting
 
 **Micromamba "Package cache error" or "file is missing" on Windows**
