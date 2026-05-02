@@ -15,7 +15,9 @@ src/cpp/
 ├── CMakeLists.txt              # Top-level CMake configuration
 ├── mask_to_mesh/src/           # Mask-to-mesh conversion tool
 │   ├── CMakeLists.txt
-│   └── main.cpp
+│   ├── main.cpp                # CLI parsing + dispatch only
+│   ├── MeshConverter.h         # Public interface + MeshConverterArgs struct
+│   └── MeshConverter.cpp       # VTK pipeline (read, smooth, decimate, write)
 ├── extract_attachments/src/    # Attachment point extraction tool
 │   ├── CMakeLists.txt
 │   ├── main.cpp
@@ -162,12 +164,16 @@ Both tools provide informative error messages with `[ERROR]`, `[WARNING]`, and `
 
 ### Module Responsibilities
 
-**mask_to_mesh**:
-- ✓ Reading NIfTI segmentation data
-- ✓ Isosurface extraction
-- ✓ Mesh smoothing and cleaning
-- ✓ Writing STL/OBJ output
-- ✗ File naming/organization (handled by workflow)
+**mask_to_mesh** — split into three files (refactored 2026-05-02):
+
+| File | Responsibility |
+|---|---|
+| `main.cpp` | CLI argument parsing (`parseArgs`, `usage`) + file-iteration dispatch |
+| `MeshConverter.h` | `MeshConverterArgs` struct + `MeshConverter` public interface |
+| `MeshConverter.cpp` | All VTK pipeline steps: `readNifti`, `extractSurface`, `smoothMesh`, `decimateMesh`, `writeMesh` |
+
+This mirrors the `AttachmentExtractor` pattern in `extract_attachments`. The split makes
+the VTK pipeline independently testable and keeps `main.cpp` as a thin orchestrator.
 
 **extract_attachments** (AttachmentExtractor class):
 - ✓ Loading and caching bone meshes
@@ -178,3 +184,5 @@ Both tools provide informative error messages with `[ERROR]`, `[WARNING]`, and `
 - ✓ VTK file export
 - ✗ File organization or batch scheduling (handled by workflow)
 
+> **Note**: Both tools follow the same pattern — a thin `main.cpp` delegates to a
+> dedicated class that owns all domain-specific logic.

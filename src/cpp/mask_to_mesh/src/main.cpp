@@ -1,64 +1,45 @@
-// mask_to_mesh — Converts binary NIfTI masks to surface meshes (STL or OBJ).
-// Responsibilities: reading NIfTI, isosurface extraction, smoothing, writing mesh.
+// mask_to_mesh — entry point.
+//
+// Responsibilities (this file only):
+//   1. CLI argument parsing
+//   2. Output directory creation
+//   3. Iteration over input files / single-file dispatch
+//
+// All VTK pipeline logic lives in MeshConverter.{h,cpp}.
 
-#include <vtkImageData.h>
-#include <vtkSmartPointer.h>
-#include <vtkNIFTIImageReader.h>
-#include <vtkFlyingEdges3D.h>
-#include <vtkWindowedSincPolyDataFilter.h>
-#include <vtkCleanPolyData.h>
-#include <vtkTriangleFilter.h>
-#include <vtkPolyData.h>
-#include <vtkSTLWriter.h>
-#include <vtkOBJWriter.h>
-#include <vtkNew.h>
-#include <vtkPolyDataConnectivityFilter.h>
-#include <vtkQuadricDecimation.h>
+#include "MeshConverter.h"
 
 #include <filesystem>
-#include <string>
-#include <vector>
 #include <iostream>
 #include <optional>
+#include <string>
 
 namespace fs = std::filesystem;
 
-// ────────────────────────────────────────────────────────────────────────────
-// CLI arguments
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// CLI
+// ─────────────────────────────────────────────────────────────────────────────
 
-struct Args
-{
-    fs::path    input_dir;
-    fs::path    output_dir;
-    int         smooth_iters     = 30;
-    double      passband         = 0.01;
-    double      binary_threshold = 0.5;
-    std::string format           = "stl";
-    double      target_reduction = 0.0;   // 0.0 = disabled; 0.9 = keep 10 % polygons
-};
-
-static void usage(const char *prog)
+static void usage(const char* prog)
 {
     std::cerr
         << "Usage: " << prog
         << " --input-dir <path> --output-dir <dir>"
            " [--smooth_iters N] [--passband F] [--format stl|obj]\n"
            "\n"
-           "  --input-dir    Path to a NIfTI file or directory of NIfTI files.\n"
-           "  --output-dir   Directory where meshes will be written.\n"
-           "  --smooth_iters Number of windowed-sinc smoothing iterations (default 30).\n"
-           "  --passband     Passband for smoothing filter (default 0.01).\n"
-           "  --format       Output format: stl (default) or obj.\n"
-           "  --decimate_target  Quadric decimation reduction ratio 0.0–1.0 (default 0.0 = off).\n";
+           "  --input-dir       Path to a NIfTI file or directory of NIfTI files.\n"
+           "  --output-dir      Directory where meshes will be written.\n"
+           "  --smooth_iters    Windowed-sinc smoothing iterations (default 30).\n"
+           "  --passband        Passband for smoothing filter (default 0.01).\n"
+           "  --format          Output format: stl (default) or obj.\n"
+           "  --decimate_target Quadric decimation reduction ratio 0.0-1.0 (default 0.0 = off).\n";
 }
 
-static std::optional<Args> parseArgs(int argc, char **argv)
+static std::optional<MeshConverterArgs> parseArgs(int argc, char** argv)
 {
-    Args a;
+    MeshConverterArgs a;
 
-    // Helper: consume the next token from argv, or emit an error and return nullopt
-    auto requireNext = [&](int &i, const std::string &flag) -> std::optional<std::string>
+    auto requireNext = [&](int& i, const std::string& flag) -> std::optional<std::string>
     {
         if (i + 1 >= argc)
         {
@@ -74,32 +55,27 @@ static std::optional<Args> parseArgs(int argc, char **argv)
 
         if (arg == "--input-dir")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             a.input_dir = *v;
         }
         else if (arg == "--output-dir")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             a.output_dir = *v;
         }
         else if (arg == "--smooth_iters")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             a.smooth_iters = std::stoi(*v);
         }
         else if (arg == "--passband")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             a.passband = std::stod(*v);
         }
         else if (arg == "--format")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             if (*v == "stl" || *v == "obj")
                 a.format = *v;
             else
@@ -110,8 +86,7 @@ static std::optional<Args> parseArgs(int argc, char **argv)
         }
         else if (arg == "--decimate_target")
         {
-            auto v = requireNext(i, arg);
-            if (!v) return {};
+            auto v = requireNext(i, arg); if (!v) return {};
             a.target_reduction = std::stod(*v);
             if (a.target_reduction < 0.0 || a.target_reduction >= 1.0)
             {
@@ -137,207 +112,40 @@ static std::optional<Args> parseArgs(int argc, char **argv)
     return a;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// String helpers
-// ────────────────────────────────────────────────────────────────────────────
-
-static std::string toLower(std::string s)
-{
-    for (char &c : s)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
-/// Returns true if `s` ends with `suffix` (case-sensitive).
-static bool endsWith(const std::string &s, const std::string &suffix)
-{
-    return s.size() >= suffix.size()
-        && std::equal(suffix.rbegin(), suffix.rend(), s.rbegin());
-}
-
-/// Strips ".nii" from double-extension files like "bone.nii.gz" whose stem is "bone.nii".
-static std::string stripNiiStem(const std::string &stem)
-{
-    if (endsWith(toLower(stem), ".nii"))
-        return stem.substr(0, stem.size() - 4);
-    return stem;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// VTK pipeline steps
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Read a NIfTI image from disk.
-[[nodiscard]]
-static vtkSmartPointer<vtkImageData> readNifti(const fs::path &p)
-{
-    vtkNew<vtkNIFTIImageReader> reader;
-    reader->SetFileName(p.string().c_str());
-    reader->Update();
-    return reader->GetOutput();
-}
-
-/// Extract an isosurface from a binary mask volume using Flying Edges.
-[[nodiscard]]
-static vtkSmartPointer<vtkPolyData> extractSurface(vtkImageData *img, double isoValue)
-{
-    vtkNew<vtkFlyingEdges3D> fe;
-    fe->SetInputData(img);
-    fe->SetValue(0, isoValue);
-    fe->ComputeNormalsOff();
-    fe->Update();
-    return fe->GetOutput();
-}
-
-/// Smooth, clean and triangulate a surface mesh.
-[[nodiscard]]
-static vtkSmartPointer<vtkPolyData> smoothMesh(vtkPolyData *pd, int iters, double passband, const std::string &filename)
-{
-    vtkNew<vtkCleanPolyData> clean;
-    clean->SetInputData(pd);
-
-    vtkNew<vtkPolyDataConnectivityFilter> connectivity;
-    vtkNew<vtkWindowedSincPolyDataFilter> ws;
-
-    std::string name_lower = toLower(filename);
-    if (name_lower.find("fibula") != std::string::npos || name_lower.find("tibia") != std::string::npos)
-    {
-        ws->SetInputConnection(clean->GetOutputPort());
-    }
-    else
-    {
-        connectivity->SetInputConnection(clean->GetOutputPort());
-        connectivity->SetExtractionModeToLargestRegion();
-        ws->SetInputConnection(connectivity->GetOutputPort());
-    }
-
-    ws->SetNumberOfIterations(iters);
-    ws->SetPassBand(passband);
-    ws->BoundarySmoothingOff();
-    ws->FeatureEdgeSmoothingOff();
-    ws->NonManifoldSmoothingOn();
-    ws->NormalizeCoordinatesOn();
-    ws->Update();
-
-    vtkNew<vtkTriangleFilter> tri;
-    tri->SetInputConnection(ws->GetOutputPort());
-
-    vtkNew<vtkCleanPolyData> finalClean;
-    finalClean->SetInputConnection(tri->GetOutputPort());
-    finalClean->PointMergingOn();
-    finalClean->Update();
-
-    return finalClean->GetOutput();
-}
-
-/// Reduce polygon count with quadric edge-collapse decimation.
-/// target_reduction in [0.0, 1.0): fraction of triangles to *remove*.
-/// Returns the input unchanged when target_reduction == 0.
-[[nodiscard]]
-static vtkSmartPointer<vtkPolyData> decimateMesh(vtkPolyData *pd, double target_reduction)
-{
-    if (target_reduction <= 0.0)
-        return pd;
-
-    vtkNew<vtkQuadricDecimation> dec;
-    dec->SetInputData(pd);
-    dec->SetTargetReduction(target_reduction);
-    dec->Update();
-    return dec->GetOutput();
-}
-
-/// Write a poly data mesh to disk in the requested format.
-[[nodiscard]]
-static bool writeMesh(const fs::path &outPath, vtkPolyData *pd, const std::string &format)
-{
-    if (format == "obj")
-    {
-        vtkNew<vtkOBJWriter> w;
-        w->SetFileName(outPath.string().c_str());
-        w->SetInputData(pd);
-        return w->Write() == 1;
-    }
-    else  // stl (default)
-    {
-        vtkNew<vtkSTLWriter> w;
-        w->SetFileName(outPath.string().c_str());
-        w->SetInputData(pd);
-        w->SetFileTypeToBinary();
-        return w->Write() == 1;
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// High-level conversion
-// ────────────────────────────────────────────────────────────────────────────
-
-/// Convert a single binary NIfTI mask file to a surface mesh.
-/// Output filename mirrors the input stem — renaming for downstream tools
-/// is handled by the workflow orchestrator (Snakefile), not here.
-[[nodiscard]]
-static bool convertMaskToMesh(const fs::path &inputFile,
-                               const fs::path &outputDir,
-                               const Args     &a)
-{
-    std::cout << "[INFO] Meshing: " << inputFile.filename().string() << "\n";
-
-    auto img  = readNifti(inputFile);
-    auto surf = extractSurface(img, a.binary_threshold);
-    auto mesh = smoothMesh(surf, a.smooth_iters, a.passband, inputFile.filename().string());
-    auto final = decimateMesh(mesh, a.target_reduction);
-
-    // Preserve the original stem (strip the double-.nii extension if present)
-    std::string stem = stripNiiStem(inputFile.stem().string());
-    std::string ext  = (a.format == "obj") ? ".obj" : ".stl";
-    fs::path    out  = outputDir / (stem + ext);
-
-    bool ok = writeMesh(out, final, a.format);
-    if (!ok)
-        std::cerr << "[ERROR] Failed to write: " << out.string() << "\n";
-    return ok;
-}
-
-/// Returns true if a file looks like a NIfTI file (.nii or .nii.gz).
-static bool isNiftiFile(const fs::path &p)
-{
-    std::string name = toLower(p.filename().string());
-    return endsWith(name, ".nii.gz") || endsWith(name, ".nii");
-}
-
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     auto parsed = parseArgs(argc, argv);
-    if (!parsed)
-        return 1;
+    if (!parsed) return 1;
 
-    const Args &a = *parsed;
+    const MeshConverterArgs& a = *parsed;
 
     try
     {
         fs::create_directories(a.output_dir);
     }
-    catch (const std::exception &e)
+    catch (const std::exception& e)
     {
         std::cerr << "[ERROR] Cannot create output directory: " << e.what() << "\n";
         return 1;
     }
 
+    MeshConverter converter(a);
     bool allOk = true;
 
     if (fs::is_regular_file(a.input_dir))
     {
-        allOk = convertMaskToMesh(a.input_dir, a.output_dir, a);
+        allOk = converter.convert(a.input_dir);
     }
     else if (fs::is_directory(a.input_dir))
     {
-        for (const auto &entry : fs::directory_iterator(a.input_dir))
+        for (const auto& entry : fs::directory_iterator(a.input_dir))
         {
-            if (entry.is_regular_file() && isNiftiFile(entry.path()))
-                allOk &= convertMaskToMesh(entry.path(), a.output_dir, a);
+            if (entry.is_regular_file())
+                allOk &= converter.convert(entry.path());
         }
     }
     else
