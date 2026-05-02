@@ -12,10 +12,8 @@ Responsibilities:
 """
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from rich.prompt import Confirm, Prompt
@@ -25,7 +23,6 @@ from .config_io import save_config
 from .micromamba import make_mamba_env
 from .system import terminate_process_tree
 from .ui import (
-    console,
     print_error,
     print_info,
     print_interrupt,
@@ -144,29 +141,29 @@ def _generate_analyses(cores: str, run_id: str, snakemake_env: dict[str, str], l
 
     base_cmd = [*_base_cmd(cores, latency_wait), "--config", f"run_id={run_id}"]
 
-    print_info(f"Ukládám reporty a analýzy do složky -> {run_reports_dir}")
+    print_info(f"Saving reports to -> {run_reports_dir}")
 
     # 1. Interaktivní HTML Report
     if user_settings.get("generate_snakemake_report", True):
         report_path = run_reports_dir / f"snakemake_report.html"
-        print_info(f"Generuji HTML report -> {report_path}")
+        print_info(f"Generating HTML report -> {report_path}")
         subprocess.run([*base_cmd, "--report", str(report_path)], env=snakemake_env, check=True)
 
     # 2. Detailní Summary
     if user_settings.get("generate_summary", True):
         summary_path = run_reports_dir / f"summary.txt"
-        print_info(f"Generuji detailní summary -> {summary_path}")
+        print_info(f"Generating detailed summary -> {summary_path}")
         with open(summary_path, "w") as f:
             subprocess.run([*base_cmd, "--summary"], env=snakemake_env, stdout=f)
 
     # 3. Vizualizace (DAG a Rulegraph) - vyžaduje Graphviz (dot)
     if user_settings.get("generate_dag", True) or user_settings.get("generate_rulegraph", True):
         if not _dot_available(snakemake_env):
-            print_error("Nástroj Graphviz (příkaz 'dot') není nainstalován. Přeskakuji generování grafů.")
+            print_error("Graphviz (the 'dot' command) is not installed. I am skipping graph generation.")
         else:
             if user_settings.get("generate_dag", True):
                 dag_path = run_reports_dir / f"dag.pdf"
-                print_info(f"Generuji DAG strom -> {dag_path}")
+                print_info(f"Generating DAG tree -> {dag_path}")
                 p1 = subprocess.Popen([*base_cmd, "--dag"], env=snakemake_env, stdout=subprocess.PIPE)
                 p2 = subprocess.Popen([*_dot_cmd(), "-Tpdf"], env=snakemake_env, stdin=p1.stdout, stdout=open(dag_path, "wb"))
                 p1.stdout.close()
@@ -174,7 +171,7 @@ def _generate_analyses(cores: str, run_id: str, snakemake_env: dict[str, str], l
 
             if user_settings.get("generate_rulegraph", True):
                 rg_path = run_reports_dir / f"rulegraph.pdf"
-                print_info(f"Generuji Rulegraph -> {rg_path}")
+                print_info(f"Generating Rulegraph -> {rg_path}")
                 p1 = subprocess.Popen([*base_cmd, "--rulegraph"], env=snakemake_env, stdout=subprocess.PIPE)
                 p2 = subprocess.Popen([*_dot_cmd(), "-Tpdf"], env=snakemake_env, stdin=p1.stdout, stdout=open(rg_path, "wb"))
                 p1.stdout.close()

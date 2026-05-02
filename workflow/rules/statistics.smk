@@ -1,6 +1,4 @@
 # statistics.smk -- Post-processing comparison of PIPELINE vs LHDL .sto outputs.
-#
-# Step 11: Compare matching Lengths .sto files and generate summary plots/tables.
 
 import os
 
@@ -41,7 +39,6 @@ rule statistics_compare:
         os.path.join(OUT_DIR, "benchmarks", "statistics_compare.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
     shell:
         """
-
         "{params.py_exe}" src/python/generate_statistics.py \
             --pipeline-dir "{params.pipeline_dir}" \
             --lhdl-dir "{params.lhdl_dir}" \
@@ -52,11 +49,10 @@ if config.get("user_settings", {}).get("enable_benchmarking", True):
 
     rule generate_benchmark_report:
         input:
-            # Pravidlo počká, dokud nebudou hotové alespoň statistiky (nebo koncový .osim), 
-            # abychom měli jistotu, že všechny benchmark .txt soubory už existují na disku
+            # rule waits until at least the statistics (or final .osim) are done, to ensure all benchmark .txt files exist on disk
             wait_for=os.path.join(OUT_DIR, "statistics", ".done")
         output:
-            # Díky funkci report() a category="Benchmarks" se vytvoří nová záložka v HTML!
+            # thanks to the function report() and category="Benchmarks", this will create a new tab in the HTML
             pdf=report(
                 os.path.join(OUT_DIR, "statistics", "Benchmark_Report.pdf"),
                 category="Benchmarks",
@@ -83,7 +79,7 @@ rule generate_summary_report:
         snakefile="workflow/Snakefile",
         run_id=RUN_ID
     shell:
-        # Snakemake zavolá sám sebe, aby vygeneroval summary aktuálního běhu
+        # Snakemake calls itself to generate a summary of the current run
         (
             '"{params.py_exe}" -m snakemake '
             '--snakefile "{params.snakefile}" '

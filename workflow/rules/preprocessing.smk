@@ -1,7 +1,5 @@
 # preprocessing.smk -- Per-file mask cleaning rules.
 #
-# Step 4: Clean bone and muscle segmentation masks.
-#
 # Each mask is processed individually so that Snakemake can:
 #   - track fine-grained dependencies (one output per input file),
 #   - parallelise cleaning across cores automatically,
@@ -74,7 +72,7 @@ def _get_raw_muscle_mask_input(wildcards):
         if "iliacus" in name:
             name = name.replace("iliacus", "iliopsoas")
 
-        # Závisíme na checkpointu — Snakemake re-evaluuje DAG po jeho dokončení.
+        # We depend on the checkpoint — Snakemake will re-evaluate the DAG after it completes.
         checkpoints.total_segmentator_muscle.get()
         return os.path.join(OUT_DIR, "muscle_segmentations_totalsegmentator", "raw", f"{name}.nii.gz")
     else:

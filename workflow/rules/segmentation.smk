@@ -1,17 +1,10 @@
 # segmentation.smk -- Bone and muscle segmentation rules.
 #
-# Step 1: Bone segmentation via TotalSegmentator (CT or MR model).
-# Step 2: Muscle segmentation via MuscleMap.
-# Step 3: Extract individual muscle masks from the multi-label output.
-#
-# Both segmentation tools produce entire directories of masks, so these
-# rules use directory() outputs -- this is the correct abstraction for
-# tools whose output set is determined internally.
+# Both segmentation tools produce entire directories of masks, so these rules use directory() outputs
 
 # ---------------------------------------------------------------------------
 # Step 1: Bone segmentation (TotalSegmentator)
 # ---------------------------------------------------------------------------
-
 
 _ts_muscle_engine = config.get("user_settings", {}).get("muscle_segmentator", "musclemap") == "totalsegmentator"
 

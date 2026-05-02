@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import tarfile
 import urllib.request
-import zipfile
 from pathlib import Path
 
 from rich.prompt import Confirm
@@ -21,7 +20,7 @@ from .constants import (
     MUSCLEMAP_YAML_CPU, MUSCLEMAP_YAML_GPU,
 )
 from .system import compute_file_hash
-from .ui import console, print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
+from .ui import print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -413,7 +412,10 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
 
 
 def patch_snakemake_benchmark(env_path: Path):
-    """Automatically patch Snakemake benchmark.py on Windows to fix missing `pss` attribute."""
+    """
+    Automatically patch Snakemake benchmark.py on Windows to fix missing `pss` attribute.
+    CHECK: https://github.com/snakemake/snakemake/issues/4159
+    """
     if platform.system() != "Windows":
         return
     site_packages = env_path / "Lib" / "site-packages"

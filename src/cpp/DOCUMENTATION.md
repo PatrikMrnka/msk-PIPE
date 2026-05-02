@@ -31,7 +31,6 @@ src/cpp/
 - C++17 compiler (MSVC on Windows)
 - VTK 9.0+ with development headers
 
-
 Output executables will be placed in `build/bin/Release/`:
 - `mask_to_mesh.exe`
 - `extract_attachments.exe`
@@ -159,30 +158,3 @@ Both tools provide informative error messages with `[ERROR]`, `[WARNING]`, and `
 **extract_attachments**:
 - No attachment points found: Increase `--threshold_mm` or check mesh alignment
 - Large clip values: Ensure `clip_fraction` is in (0.0, 0.5) range
-
-## Code Organization
-
-### Module Responsibilities
-
-**mask_to_mesh** — split into three files (refactored 2026-05-02):
-
-| File | Responsibility |
-|---|---|
-| `main.cpp` | CLI argument parsing (`parseArgs`, `usage`) + file-iteration dispatch |
-| `MeshConverter.h` | `MeshConverterArgs` struct + `MeshConverter` public interface |
-| `MeshConverter.cpp` | All VTK pipeline steps: `readNifti`, `extractSurface`, `smoothMesh`, `decimateMesh`, `writeMesh` |
-
-This mirrors the `AttachmentExtractor` pattern in `extract_attachments`. The split makes
-the VTK pipeline independently testable and keeps `main.cpp` as a thin orchestrator.
-
-**extract_attachments** (AttachmentExtractor class):
-- ✓ Loading and caching bone meshes
-- ✓ Building spatial acceleration structures
-- ✓ Computing vertex-to-surface distances
-- ✓ Clipping and boundary extraction
-- ✓ Contour smoothing via splines
-- ✓ VTK file export
-- ✗ File organization or batch scheduling (handled by workflow)
-
-> **Note**: Both tools follow the same pattern — a thin `main.cpp` delegates to a
-> dedicated class that owns all domain-specific logic.

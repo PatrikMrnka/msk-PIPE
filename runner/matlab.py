@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 from .system import matlab_args
-from .ui import console, print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
+from .ui import print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
 
 
 # ── MATLAB batch snippets ─────────────────────────────────────────────────────

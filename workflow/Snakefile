@@ -2,8 +2,6 @@
 #
 # This file is intentionally minimal.  All logic lives in the rule modules
 # under workflow/rules/.  Configuration is loaded from config/config.json
-# and augmented at runtime by runner/pipeline.py (which passes run_id and
-# optional input_path via --config).
 
 
 configfile: "config/config.json"
@@ -24,11 +22,9 @@ include: "rules/modeling.smk"
 # Step 11: Post-run statistics (PIPELINE vs selected LHDL reference).
 include: "rules/statistics.smk"
 
-
 # ---------------------------------------------------------------------------
 # Final target: the complete pipeline output.
 # ---------------------------------------------------------------------------
-
 
 rule all:
     input:
@@ -37,8 +33,6 @@ rule all:
         os.path.join(OUT_DIR, "setup_MuscleGeneratorTool.xml"),
         os.path.join(OUT_DIR, "pipeline_model.osim"),
         os.path.join(OUT_DIR, "statistics", ".done"),
-        os.path.join(OUT_DIR, "statistics", "Kinematika_Report.pdf"),  # Vyžádá generování PDF
-        os.path.join(OUT_DIR, "statistics", "Celkove_Statistiky_s_Procenty.csv"), # Vyžádá CSV
-        (os.path.join(OUT_DIR, "statistics", "Benchmark_Report.pdf") if config.get("user_settings", {}).get("enable_benchmarking", True) else []),
-        # expand(os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"), muscle=MUSCLES),
-        # expand(os.path.join(OUT_DIR, "VTK", "{bone}.vtk"), bone=BONE_MASKS)
+        os.path.join(OUT_DIR, "statistics", "Kinematika_Report.pdf"),
+        os.path.join(OUT_DIR, "statistics", "Celkove_Statistiky_s_Procenty.csv"),
+        (os.path.join(OUT_DIR, "statistics", "Benchmark_Report.pdf") if config.get("user_settings", {}).get("enable_benchmarking", True) else [])

@@ -21,7 +21,6 @@ from rich.prompt import Confirm, Prompt
 
 from . import constants as C
 from .ui import (
-    console,
     print_check,
     print_error,
     print_info,
@@ -95,6 +94,7 @@ def _apply_staple_colon_fix(staple_root: Path) -> bool:
     Newer MATLAB versions require scalar operands for the colon operator.
     Older STAPLE versions use ``size(idx)`` (1x2 vector) in PCRegionGrowing,
     which crashes during femoral condyle extraction.
+    CHECK: https://github.com/modenaxe/msk-STAPLE/issues/120
     """
     pc_region_growing = staple_root / _STAPLE_PCREGIONGROWING_REL
 

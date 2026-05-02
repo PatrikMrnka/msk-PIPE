@@ -12,7 +12,7 @@ and managed by a Python runner that handles environment setup, dependency
 checks, and pipeline execution.
 
 ```
-python -m runner [--input <file_or_dir>]
+python -m runner [--input <file_or_dir>] -> also automatical detection, but --input is recommened use! :-)
         |
         v
   Pre-flight checks (runner/)
@@ -55,6 +55,8 @@ python -m runner [--input <file_or_dir>]
 | **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
 | **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
 
+Author tested it with MATLAB R2025b version. :-)
+
 ## Getting Started
 
 Before running the pipeline for the first time, you need to set up the Python environment for the **runner** itself. The runner (`python -m runner`) uses your **host Python installation** (not one of the managed Conda environments), so its dependencies must be installed separately.
@@ -85,7 +87,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-This installs the minimal set of packages required by the runner (`pyyaml`, `rich`). All heavy pipeline dependencies (Snakemake, PyTorch, etc.) are managed automatically inside isolated Conda environments by the runner itself.
+This installs the minimal set of packages required by the runner (`pyyaml`, `rich`, `graphviz`,). All heavy pipeline dependencies (Snakemake, PyTorch, etc.) are managed automatically inside isolated Conda environments by the runner itself.
 
 ### 3. Run the pipeline
 
@@ -124,6 +126,7 @@ To fix this, you must **enable Long Paths support** in Windows:
 - If STAPLE is not found, the runner offers automatic download from GitHub into `src/STAPLE`.
 - After STAPLE is detected or downloaded, pre-flight automatically applies a MATLAB R2023a+ compatibility patch in `GIBOC-core/SubFunctions/GeometricFun/PCRegionGrowing.m` (replaces `size(idx)` with `length(idx)` in `Pts_Out(...)`) when needed.
 - The patch step is idempotent and is skipped if the fix is already present.
+- CHECK: https://github.com/modenaxe/msk-STAPLE/issues/120
 
 ### Muscle Wrapping 2.0 (OsimMuscleGeneratorTool) Setup
 
@@ -229,6 +232,10 @@ msk-pipeline/
 ├── data/
 │   ├── input/                     # Default input directory
 │       ├── landmarks/             # User provided landmarks of muscles
+│       ├── mri/             
+│       ├── ct/             
+│       ├── landmarks/             # User provided landmarks of muscles
+│       ├── data_download.txt      # download data foldeer from this URL!!!
 │   ├── output/                    # Pipeline outputs (run_1, run_2, ...)
 │   ├── opensim/                   # Motion files (.mot) and activations (.sto)
 │   └── Experiments/               # LHDL reference datasets
@@ -273,7 +280,9 @@ msk-pipeline/
 │       ├── mask_to_mesh/                           # NIfTI → STL/OBJ (C++/VTK)
 │       │   └── src/
 │       │       ├── main.cpp
-│       │       └── CMakeLists.txt
+│       │       ├── MeshConverter.cpp
+│       │       |── MeshConverter.h
+│       |       └── CMakeLists.txt
 │       └── extract_attachments/                    # Muscle-bone proximity (C++/VTK)
 │           └── src/
 │               ├── main.cpp
@@ -303,7 +312,7 @@ The auto-detection scans for formats in the following priority:
 2. **RAW** — a flat binary volume (`.raw`). *Note: Must be accompanied by a `coordinates.txt` file containing per-slice Z coordinates.*
 3. **DICOM** — a directory of `.dcm` files (or standard DICOM files without extensions).
 
-Alternatively, you can bypass auto-detection and specify a file directly using the `--input` flag which is considered a better option.
+Alternatively, you can bypass auto-detection and specify a file diTherectly using the `--input` flag which is considered a better option. **The `--input` flag is the RECOMMENDED METHOD!!!**
 
 ## Pipeline Steps
 
@@ -427,6 +436,7 @@ data/output/run_N/
 │   ├── Benchmark_Report.pdf
 │   └── summary_metadata.txt
 └── benchmarks/              # Per-rule Snakemake benchmark files
+
 ```
 
 And reports folder:
@@ -449,6 +459,7 @@ python -m runner
 
 # 2. Explicit Input (NIfTI or RAW)
 # Run with a specific input file, ignoring the data/input/ directory.
+# RECOMMENDED!!!!!
 python -m runner --input /path/to/patient_ct {.nii.gz/.raw}
 
 # 3. Explicit Input (DICOM)

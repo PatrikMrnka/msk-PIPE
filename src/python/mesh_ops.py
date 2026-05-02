@@ -11,7 +11,6 @@ import os
 import sys
 from pathlib import Path
 import trimesh
-import numpy as np
 
 # Ensure runner/ is on the path so ui.py can be imported regardless of CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

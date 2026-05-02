@@ -119,15 +119,41 @@ def musclemap_env_name():
     )
 
 
-def mask_to_mesh_bin():
-    """Return the platform-appropriate path to the mask_to_mesh binary."""
+def _cpp_tool_default_bin(tool_name):
+    """Build default executable path from config.paths.cpp_tools_path."""
+    cpp_root = config.get("paths", {}).get("cpp_tools_path", "src/cpp")
     if os.name == "nt":
-        return "src/cpp/build/bin/Release/mask_to_mesh.exe"
-    return "src/cpp/build/bin/mask_to_mesh"
+        return os.path.normpath(
+            str(Path(cpp_root) / "build" / "bin" / "Release" / f"{tool_name}.exe")
+        )
+    return os.path.normpath(str(Path(cpp_root) / "build" / "bin" / tool_name))
+
+
+def _cpp_tool_from_config(path_key, tool_name):
+    """Resolve optional explicit binary path from config.paths[path_key]."""
+    raw = config.get("paths", {}).get(path_key, "")
+    if not raw:
+        return ""
+
+    candidate = Path(raw)
+    expected = f"{tool_name}.exe" if os.name == "nt" else tool_name
+
+    # If config points to a directory, append the expected executable name.
+    if candidate.is_dir():
+        return os.path.normpath(str(candidate / expected))
+
+    # Accept only explicit executable-like paths.
+    if candidate.name.lower() == expected.lower():
+        return os.path.normpath(str(candidate))
+
+    return ""
+
+
+def mask_to_mesh_bin():
+    """Return config-aware path to the mask_to_mesh binary."""
+    return _cpp_tool_from_config("mask_to_mesh_path", "mask_to_mesh") or _cpp_tool_default_bin("mask_to_mesh")
 
 
 def extract_attachments_bin():
-    """Return the platform-appropriate path to the extract_attachments binary."""
-    if os.name == "nt":
-        return "src/cpp/build/bin/Release/extract_attachments.exe"
-    return "src/cpp/build/bin/extract_attachments"
+    """Return config-aware path to the extract_attachments binary."""
+    return _cpp_tool_from_config("extract_attachments_path", "extract_attachments") or _cpp_tool_default_bin("extract_attachments")

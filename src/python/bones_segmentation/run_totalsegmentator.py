@@ -20,7 +20,7 @@ from pathlib import Path
 
 # Ensure runner/ is on the path so ui.py can be imported regardless of CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from runner.ui import print_info, print_success, print_warning, print_error, print_step
+from runner.ui import print_info, print_success, print_error
 
 from totalsegmentator.python_api import totalsegmentator
 from totalsegmentator.map_to_binary import class_map
@@ -104,7 +104,8 @@ def run_totalsegmentator(
             device=device,
         )
 
-        # Remove labels produced by appendicular_bones that are not requested.
+        # Remove labels produced by appendicular_bones that are not requested. - --roi-subet applies only to the total model,
+        # so we need to manually delete unwanted files here.
         for label in class_map[appendicular_map_key].values():
             p = out_dir / f"{label}.nii.gz"
             if p.exists() and label not in rois_append:

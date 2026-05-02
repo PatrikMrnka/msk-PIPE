@@ -229,7 +229,6 @@ def build_xml(
     add_elem(tool, "model_file", osim_path.name)
     add_elem(tool, "motion_file", motion_file)
     add_elem(tool, "output_model_file", output_model)
-    # ET.Comment(" <output_muscle_analysis_file_prefix>./Experiments/</output_muscle_analysis_file_prefix> ")
     add_elem(tool, "output_muscle_analysis_file_prefix", "./Experiments/")
 
     gen_set = add_elem(tool, "MuscleGeneratorSet")

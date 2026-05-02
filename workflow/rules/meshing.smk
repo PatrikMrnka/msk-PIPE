@@ -1,9 +1,4 @@
 # meshing.smk -- Mask-to-mesh conversion, STAPLE renaming, and mesh merging.
-#
-# Step 5a: Convert cleaned bone masks to STL meshes (per file).
-# Step 5b: Convert cleaned muscle masks to OBJ meshes (per file).
-# Step 6a: Rename bone meshes to STAPLE-compatible names.
-# Step 6b: Merge bone mesh pairs for STAPLE input.
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +108,8 @@ rule copy_femur_r_to_staple:
 # Mappings & Input Functions
 # ---------------------------------------------------------------------------
 
-# Slovník definující, z jakých souborů se skládají jednotlivé sloučené modely
+
+# dictionary for merging meshes
 MERGE_SOURCES = {
     "pelvis_no_sacrum": ["hip_left.stl", "hip_right.stl"],
     "pelvis_with_sacrum": ["hip_left.stl", "hip_right.stl", "sacrum.stl"],
@@ -122,19 +118,19 @@ MERGE_SOURCES = {
 
 
 def get_merge_inputs(wildcards):
-    """Dynamicky načte seznam vstupních meshů pro slučování."""
+    """Dynamically loads the list of input meshes for merging based on the wildcard."""
     files = MERGE_SOURCES.get(wildcards.merged_bone, [])
     # Use posix paths to avoid Snakemake matching errors on Windows
     return [f"{OUT_DIR}/bone_models/{f}".replace("\\", "/") for f in files]
 
 
 def get_split_input(wildcards):
-    """Dynamicky určí vstupní soubor na základě jména kosti."""
+    """Dynamically determines the input file based on the bone name."""
     if wildcards.bone == "tibia":
-        # Tibia se štípe ze sloučeného temp souboru
+        # Tibia splits from the merged temp file
         return os.path.join(BONE_STAPLE_DIR, "tibia_fibula_temp.stl").replace("\\", "/")
     else:
-        # Ostatní (např. patella) se berou přímo z bone_models
+        # others (e.g., patella) are taken directly from bone_models
         return os.path.join(OUT_DIR, "bone_models", f"{wildcards.bone}.stl").replace(
             "\\", "/"
         )

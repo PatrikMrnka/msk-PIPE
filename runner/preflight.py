@@ -170,8 +170,5 @@ def main(input_path: str | None = None) -> None:
     # 11. Hand off to pipeline runner
     run_pipeline(user_settings, config)
 
-
-# ── __main__.py equivalent (can also live as runner/__main__.py) ──────────────
-
 if __name__ == "__main__":
     main()

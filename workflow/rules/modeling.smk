@@ -1,9 +1,4 @@
 # modeling.smk -- OpenSim model generation, attachment extraction, muscle wrapping.
-#
-# Step 7:  Generate the bone model via MSK-STAPLE (MATLAB).
-# Step 8:  Extract muscle-to-bone attachment areas (C++).
-# Step 9:  Generate the MuscleGeneratorTool XML configuration.
-# Step 10: Run Muscle Wrapping 2.0 to produce the final model.
 
 
 # ---------------------------------------------------------------------------
@@ -42,43 +37,9 @@ rule msk_staple:
             --mesh-file "bone_models/sacrum.stl"
         """
 
-# rule convert_to_vtk_bones:
-#     input:
-#         bones_dir=os.path.join(OUT_DIR, "bone_models", "{bone}.stl"),
-#     output:
-#         vtks_dir=os.path.join(OUT_DIR, "VTK", "{bone}.vtk"),
-#     wildcard_constraints:
-#         bone="|".join(BONE_MASKS),
-#     params:
-#         py_exe=get_py_exe("msk_base"),
-#     benchmark:
-#         os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_bones_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-#     shell:
-#         """
-#         "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
-#             --input {input.bones_dir} \
-#             --output {output.vtks_dir}
-#         """
-
 MUSCLES = list(MUSCLE_LABELS)
 
-# rule convert_to_vtk_muscles:
-#     input:
-#         muscles_path=os.path.join(OUT_DIR, "muscle_models", "{muscle}.obj")
-#     output:
-#         vtks_dir=os.path.join(OUT_DIR, "VTK", "{muscle}.vtk"),
-#     wildcard_constraints:
-#         muscle="|".join(MUSCLE_LABELS),
-#     params:
-#         py_exe=get_py_exe("msk_base"),
-#     benchmark:
-#         os.path.join(OUT_DIR, "benchmarks", "convert_to_vtk_muscles_{muscle}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-#     shell:
-#         """
-#         "{params.py_exe}" src/python/CONVERTOVTK_DELETEAFTER.py \
-#             --input {input.muscles_path} \
-#             --output {output.vtks_dir}
-#         """
+
 # ---------------------------------------------------------------------------
 # Step 8: Extract muscle-to-bone attachment points
 # ---------------------------------------------------------------------------
@@ -122,31 +83,11 @@ for muscle_name, roles in TOPOLOGY.items():
 
 GEOMETRY_BONES = [b for b in BONE_MUSCLE_MAP.keys() if b != "pelvis_with_sacrum"]
 
-
-# rule clean_geometry_mesh:
-#     input:
-#         geom_dir=os.path.join(OUT_DIR, "Geometry"),
-#     output:
-#         sentinel=touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry_{geom_bone}.sentinel")),
-#     params:
-#         py_exe=get_py_exe("msk_base"),
-#         mesh=lambda w: os.path.join(OUT_DIR, "Geometry", f"{w.geom_bone}.obj"),
-#     wildcard_constraints:
-#         geom_bone="|".join(GEOMETRY_BONES) if GEOMETRY_BONES else "__none__",
-#     benchmark:
-#         os.path.join(OUT_DIR, "benchmarks", "clean_geometry_mesh_{geom_bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
-#     shell:
-#         """
-#         "{params.py_exe}" src/python/clean_mesh.py --input "{params.mesh}"
-#         """
-
-
 rule all_geometry_cleaned:
     input:
         geom_dir=os.path.join(OUT_DIR, "Geometry"),
     output:
         touch(os.path.join(OUT_DIR, ".cleaned_meshes", "geometry.done")),
-
 
 if METHOD == "proximity_based":
     for bone, mappings in BONE_MUSCLE_MAP.items():
@@ -180,17 +121,13 @@ elif METHOD == "atlas_based":
             input:
                 geom_dir=os.path.join(OUT_DIR, "Geometry"),
                 pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
-                # Načítáme dynamicky všechny LHDL úpony jako závislost tohoto pravidla
                 lhdl_att=mappings["inputs"]
             output:
-                # Očekávané VTK soubory
                 vtks=mappings["outputs"],
                 done=touch(os.path.join(OUT_DIR, "attachments", f".done_{bone}"))
             params:
                 py_exe=get_py_exe("msk_base"),
-                # Předzpracované LHDL kosti
                 lhdl_bone=os.path.join(LHDL_BONES, f"{bone}.obj"),
-                # Target STAPLE kosti
                 target_bone=lambda w, b=bone: os.path.join(BONE_STAPLE_DIR, f"{b}.stl") if b != "pelvis_with_sacrum" else os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl")
             
             benchmark:

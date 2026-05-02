@@ -19,14 +19,13 @@ dependencies:
   - colorama
   - simpleitk
   - pip
-  - pyvista # lhdl mapping dependencies
+  - pyvista
   - numpy
   - scipy
   - trimesh
   - pip:
-  # lhdl mapping dependencies (přesunuto z conda do pip)
+  # lhdl mapping dependencies
     - probreg
     - pycpd
     - open3d
     - pymeshlab
-    # - vtk # ODSTRANIT!!! POUZE TED
