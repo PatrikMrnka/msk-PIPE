@@ -157,6 +157,8 @@ If you don't have a GPU (or want CPU-only for testing):
 
 **Note:** CPU processing is significantly slower (~10-30x) than GPU, but produces identical results.
 
+**IF `has_gpu` IS NOT AVAILABLE, THE SYSTEM WILL CHECK GPU AVAILABILITY AUTOMATICALLY!** 
+
 ---
 
 
