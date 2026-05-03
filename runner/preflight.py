@@ -103,6 +103,20 @@ def main(input_path: str | None = None) -> None:
     # Handle skip preflight checks early exit
     if user_settings.get("skip_preflight_checks"):
         print_info("Skipping pre-flight checks as requested.")
+        # Still apply has_gpu-driven auto-configuration even in skip mode
+        if "has_gpu" in user_settings:
+            has_gpu = user_settings["has_gpu"]
+        else:
+            has_gpu = check_gpu()
+            user_settings["has_gpu"] = has_gpu
+        
+        # Auto-configure device and environments based on has_gpu
+        config.setdefault("totalsegmentator", {})["device"] = "gpu" if has_gpu else "cpu"
+        config.setdefault("snakemake_env", {}).update(
+            totalseg="env_totalseg_gpu.yaml" if has_gpu else "env_totalseg_cpu.yaml",
+            musclemap="env_musclemap_gpu.yaml" if has_gpu else "env_musclemap_cpu.yaml",
+        )
+        
         mw_path = paths.get("muscle_wrapping_path")
         if mw_path:
             bin_dir = Path(mw_path) / "ExternalLibs" / "OpenSim" / "Bin" / "bin"
@@ -117,8 +131,16 @@ def main(input_path: str | None = None) -> None:
         return
 
     # 2. GPU detection → drives all env/yaml selection
-    has_gpu = check_gpu()
-    user_settings["has_gpu"] = has_gpu
+    # Prefer has_gpu from config.json, detect if not explicitly set
+    if "has_gpu" in user_settings:
+        has_gpu = user_settings["has_gpu"]
+        print_info(f"Using has_gpu={has_gpu} from config.json")
+    else:
+        has_gpu = check_gpu()
+        user_settings["has_gpu"] = has_gpu
+    
+    # Automatically set totalsegmentator.device and snakemake_env based on has_gpu
+    config.setdefault("totalsegmentator", {})["device"] = "gpu" if has_gpu else "cpu"
     config.setdefault("snakemake_env", {}).update(
         totalseg="env_totalseg_gpu.yaml" if has_gpu else "env_totalseg_cpu.yaml",
         musclemap="env_musclemap_gpu.yaml" if has_gpu else "env_musclemap_cpu.yaml",

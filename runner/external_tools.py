@@ -207,6 +207,7 @@ def compile_cpp_tools(paths: dict) -> bool:
             found = _check(candidate)
             if found:
                 paths["cpp_tools_path"] = str(found)
+                _update_cpp_tools_paths(paths, found)
                 print_success(f"C++ tools already compiled in {found}.")
                 return True
 
@@ -220,6 +221,7 @@ def compile_cpp_tools(paths: dict) -> bool:
     src_dir = cpp_dir
 
     if _check(cpp_dir):
+        _update_cpp_tools_paths(paths, cpp_dir)
         print_success("C++ tools already compiled.")
         return True
 
@@ -236,7 +238,11 @@ def compile_cpp_tools(paths: dict) -> bool:
     paths["vtk_path"] = str(vtk_cmake_dir)
 
     build_dir.mkdir(parents=True, exist_ok=True)
-    return _cmake_build_tools(src_dir, build_dir, vtk_cmake_dir)
+    if _cmake_build_tools(src_dir, build_dir, vtk_cmake_dir):
+        _update_cpp_tools_paths(paths, cpp_dir)
+        return True
+    
+    return False
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
@@ -247,6 +253,15 @@ def _cpp_exe(build_dir: Path, name: str) -> Path:
     if platform.system() == "Windows":
         return build_dir / "bin" / "Release" / f"{name}.exe"
     return build_dir / "bin" / name
+
+
+def _update_cpp_tools_paths(paths: dict, cpp_dir: Path) -> None:
+    """Update paths dict with executable paths after successful build."""
+    build_dir = Path(cpp_dir) / "build"
+    paths["mask_to_mesh_path"] = str(_cpp_exe(build_dir, "mask_to_mesh"))
+    paths["extract_attachments_path"] = str(_cpp_exe(build_dir, "extract_attachments"))
+    print_info(f"Updated mask_to_mesh_path: {paths['mask_to_mesh_path']}")
+    print_info(f"Updated extract_attachments_path: {paths['extract_attachments_path']}")
 
 
 def _vtk_cmake_dir(base: Path) -> Path | None:

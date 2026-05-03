@@ -55,6 +55,9 @@ python -m runner [--input <file_or_dir>] -> also automatical detection, but --in
 | **MuscleMap** | Deep-learning muscle segmentation | Cloned from GitHub automatically |
 | **OpenSim** API | Biomechanical modelling | Bundled with MW2 |
 
+For correct operation in GPU mode with CUDA cores, the latest NVIDIA drivers must be installed.
+If you have an NVIDIA GPU, its presence is verified via the `nvidia-smi` command.
+
 Author tested it with MATLAB R2025b version. :-)
 
 ## Getting Started
@@ -94,7 +97,7 @@ This installs the minimal set of packages required by the runner (`pyyaml`, `ric
 With the venv active, launch the runner from the project root:
 
 ```powershell
-python -m runner
+python -m runner --input data/input/ct/ct.nii.gz
 ```
 
 On the very first run the runner will:
@@ -107,7 +110,55 @@ Subsequent runs skip already-completed setup steps and go straight to pipeline e
 
 ---
 
-### Known Issues & Troubleshooting
+## GPU / CPU Configuration
+
+The pipeline automatically selects GPU or CPU mode based on the **`has_gpu`** setting in `config/config.json`.
+
+### Quick Switch: GPU ↔ CPU
+
+Simply change one setting in `config/config.json`:
+
+```json
+"user_settings": {
+    "has_gpu": true,        // Use GPU (requires NVIDIA GPU + drivers)
+    // or
+    // "has_gpu": false,    // Use CPU (always works, but slower)
+}
+```
+
+**When you change `has_gpu`, the runner automatically updates:**
+- ✅ TotalSegmentator device: `gpu` or `cpu`
+- ✅ MuscleMap environment: GPU or CPU PyTorch variant
+- ✅ TotalSegmentator environment: GPU or CPU CUDA/PyTorch setup
+
+### How It Works
+
+The `runner/preflight.py` automatically configures based on `has_gpu`:
+
+| `has_gpu` | TotalSegmentator | MuscleMap | Result |
+|-----------|------------------|-----------|--------|
+| `true` | `--device gpu` | `env_musclemap_gpu.yaml` | GPU mode (fast, requires NVIDIA GPU) |
+| `false` | `--device cpu` | `env_musclemap_cpu.yaml` | CPU mode (slower, always works) |
+
+### GPU Requirements
+
+To use GPU mode (`has_gpu: true`), ensure:
+1. **NVIDIA GPU** is installed on your system
+2. **NVIDIA drivers** are up-to-date (check via `nvidia-smi`)
+3. **CUDA-capable GPU** with sufficient VRAM (~4GB minimum for TotalSegmentator)
+
+If `nvidia-smi` fails or GPU detection is disabled, the runner will automatically fall back to CPU mode.
+
+### CPU-Only Setup
+
+If you don't have a GPU (or want CPU-only for testing):
+1. Set `has_gpu: false` in `config/config.json`
+2. Run: `python -m runner --input data/input/ct/ct.nii.gz`
+
+**Note:** CPU processing is significantly slower (~10-30x) than GPU, but produces identical results.
+
+---
+
 
 **Micromamba "Package cache error" or "file is missing" on Windows**
 During environment creation, you might encounter an error like `Invalid package cache, file ... is missing` or `Package cache error`. This is typically caused by the Windows 260 character path limit when unpacking libraries with deep folder structures (like `viskores`). 
