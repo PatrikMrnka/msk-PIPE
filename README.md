@@ -148,7 +148,7 @@ Navigate to the project root and run CMake configure and build. The following co
 
 **Configure (CMake):**
 ```bash
-cmake -B src/MW2/Build -S src/MW2/Sources `
+cmake -B src/MW2/Build -S src/MW2/Sources/Sources `
   -DBUILD_EXTERNAL_DEPENDENCIES=OFF `
   -DBUILD_PIPELINE_DEPENDENCIES=ON `
   -DBUILD_SHARED_LIBS=ON `
