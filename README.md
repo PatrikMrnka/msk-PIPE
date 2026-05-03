@@ -405,7 +405,7 @@ Converts cleaned NIfTI masks to surface meshes using a C++ binary built on VTK:
 
 ### Step 6: Mesh Renaming and Merging
 - Renames bone meshes to STAPLE-compatible names (e.g. `hip_left` → `pelvis_no_sacrum`)
-- Merges pelvis halves and splits composite meshes (tibia/fibula) using PyMeshLab
+- Merges pelvis halves and splits composite meshes (tibia/fibula) using trimesh
 
 ### Step 7: OpenSim Bone Model (MSK-STAPLE)
 Invokes MATLAB to run the MSK-STAPLE toolbox, which computes anatomical and
