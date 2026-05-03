@@ -6,9 +6,8 @@
         "generate_dag": true,
         "generate_rulegraph": true,
         "enable_benchmarking": true,
-        "has_gpu": true,
         "input_format": "nifti",
-        "skip_preflight_checks": true,
+        "skip_preflight_checks": false,
         "snakemake_cores": "all",
         "snakemake_latency_wait": 30,
         "muscle_segmentator": "musclemap"
@@ -19,13 +18,13 @@
     "paths": {
         "input_dir": "data/input",
         "output_dir": "data/output",
-        "extract_attachments_path": "C:\\msk-PIPE\\src\\cpp\\build\\bin\\Release\\extract_attachments.exe",
-        "mask_to_mesh_path": "C:\\msk-PIPE\\src\\cpp\\build\\bin\\Release\\mask_to_mesh.exe",
-        "muscle_wrapping_path": "C:\\msk-PIPE\\src\\MW2\\Build",
-        "staple_path": "src\\STAPLE",
-        "vtk_path": "C:\\msk-PIPE\\src\\MW2\\Build\\ExternalLibs\\VTK\\Bin\\lib\\cmake\\vtk-9.4",
-        "input_path": "C:\\msk-PIPE\\data\\input\\ct\\ct.nii.gz",
-        "cpp_tools_path": "C:\\msk-PIPE\\src\\cpp"
+        "extract_attachments_path": "src/cpp/build/bin/Release/extract_attachments.exe",
+        "mask_to_mesh_path": "src/cpp/build/bin/Release/mask_to_mesh.exe",
+        "muscle_wrapping_path": "src/MW2/Build",
+        "staple_path": "src/STAPLE",
+        "vtk_path": "src/MW2/Build/ExternalLibs/VTK/Bin/lib/cmake/vtk-9.4",
+        "input_path": "data/input/ct/ct.nii.gz",
+        "cpp_tools_path": "src/cpp"
     },
     "totalsegmentator": {
         "fast": false,

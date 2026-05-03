@@ -146,6 +146,9 @@ def main(input_path: str | None = None) -> None:
         musclemap="env_musclemap_gpu.yaml" if has_gpu else "env_musclemap_cpu.yaml",
     )
 
+    # Persist has_gpu/device/env selection early so it survives later failures.
+    save_config(config, C.MAIN_CONFIG_PATH)
+
     # 3. Micromamba + conda environments
     ok, config = check_micromamba(config, has_gpu=has_gpu)
     if not ok:

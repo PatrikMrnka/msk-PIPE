@@ -29,7 +29,6 @@ def load_config(path: Path) -> dict:
             "generate_dag": True,
             "generate_rulegraph": True,
             "enable_benchmarking": True,
-            "has_gpu": True,
             "input_format": "nifti",
             "skip_preflight_checks": False,
             "snakemake_cores": "all",
