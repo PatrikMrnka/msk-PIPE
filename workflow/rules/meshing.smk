@@ -62,7 +62,7 @@ rule muscle_mask_to_obj:
         out_dir=os.path.join(OUT_DIR, "muscle_models"),
         smooth=config.get("muscle_to_mesh", {}).get("smooth_iterations", 30),
         passband=config.get("muscle_to_mesh", {}).get("passband", 0.005),
-        decimate=config.get("bone_to_mesh", {}).get("target_reduction", 0.0),
+        decimate=config.get("muscle_to_mesh", {}).get("target_reduction", 0.0),
     shell:
         """
         "{params.cpp_bin}" \
