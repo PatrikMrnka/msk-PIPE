@@ -6,11 +6,12 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import re
 import signal
 import subprocess
 from pathlib import Path
 
-from .ui import print_check, print_warning, print_success, console
+from .ui import print_check, print_error, print_info, print_subprocess_error, print_warning, print_success, console
 
 
 # ── Process management ────────────────────────────────────────────────────────

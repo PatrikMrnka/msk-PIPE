@@ -65,15 +65,12 @@ def _remove_torch_from_requirements(req_file: Path) -> None:
 
 def install_musclemap_in_env(repo_path: Path, env_name: str) -> bool:
     """
-    pip-install MuscleMap from *repo_path* into *env_name*.
-
-    GPU environments first install dependencies from a filtered requirements
-    file (torch excluded) then install MuscleMap itself with --no-deps so
-    the conda-managed pytorch-cuda is not overwritten.
+    Torch is already installed in GPU env via pip in micromamba.py (right after env create/update).
+    Here we just filter out torch from requirements.txt and install the rest of dependencies + MuscleMap.
     """
     python_exe = _python_exe(env_name)
     if not python_exe.exists():
-        print_error(f"Python not found for {env_name} at {python_exe}")
+        print_error(f"Python executable not found in '{env_name}' at expected location: {python_exe}")
         return False
 
     is_gpu_env = env_name.endswith("_gpu")
@@ -84,32 +81,26 @@ def install_musclemap_in_env(repo_path: Path, env_name: str) -> bool:
         if not req_file.exists():
             print_error(f"requirements.txt not found at {req_file}")
             return False
-
-        print_info("GPU env: removing torch from requirements.txt to respect conda pytorch-cuda.")
+        print_info("GPU env: removing torch from requirements.txt (already installed via pip).")
         _remove_torch_from_requirements(req_file)
 
     install_result = _micromamba_run(
         env_name, "python", "-m", "pip", "install",
         "-e", str(repo_path.resolve()),
     )
-
     if install_result.returncode != 0:
         print_error("MuscleMap pip install failed.")
-        if install_result.stderr:
-            print_subprocess_error(install_result.stderr)
+        print_subprocess_error(install_result)
         return False
 
-    # Smoke-test: mm_segment must be importable
     verify = _micromamba_run(env_name, "mm_segment", "-h", timeout=120)
     if verify.returncode != 0:
-        print_warning("MuscleMap installed but mm_segment verification failed.")
-        if verify.stderr:
-            print_subprocess_error(verify.stderr)
+        print_warning("MuscleMap installed, but mm_segment verification failed.")
+        print_subprocess_error(verify)
         return False
 
     print_success("MuscleMap installed – mm_segment is available.")
     return True
-
 
 def _clone_musclemap(dest: Path) -> bool:
     """Clone the MuscleMap repository into *dest*. Returns True on success."""

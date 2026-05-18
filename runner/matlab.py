@@ -142,7 +142,7 @@ def setup_opensim_matlab(mw_build_path: str) -> bool:
 
         if "SETUP_SCRIPT_COMPLETED" not in res.stdout:
             print_error("OpenSim configuration script failed.")
-            print_subprocess_error(res.stdout)
+            print_subprocess_error(res)
             return False
     except Exception as exc:
         print_error(f"Unexpected error communicating with MATLAB: {exc}")
@@ -162,7 +162,7 @@ def setup_opensim_matlab(mw_build_path: str) -> bool:
             return True
 
         print_error("OpenSim verification failed after configuration.")
-        print_subprocess_error(res2.stdout)
+        print_subprocess_error(res2)
         return False
 
     except Exception as exc:

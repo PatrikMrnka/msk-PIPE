@@ -15,10 +15,12 @@ from rich.prompt import Confirm
 
 from .constants import (
     BIN_DIR, ENVS_DIR,
-    MICROMAMBA_EXE, MICROMAMBA_WIN_URL,
+    MICROMAMBA_EXE, MICROMAMBA_WIN_URL, MICROMAMBA_WIN_URL_TEMPLATE, MICROMAMBA_DEFAULT_VERSION,
     BASE_ENVS, MUSCLEMAP_ENV_CPU, MUSCLEMAP_ENV_GPU,
     MUSCLEMAP_YAML_CPU, MUSCLEMAP_YAML_GPU,
 )
+from .constants import MAIN_CONFIG_PATH
+import json
 from .system import compute_file_hash
 from .ui import print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
 
@@ -302,24 +304,77 @@ def install_micromamba() -> bool:
 
     BIN_DIR.mkdir(parents=True, exist_ok=True)
     tmp_file = BIN_DIR / "micromamba.tar.bz2"
-
+    # Determine which version/tag to download. The user can configure the
+    # desired micromamba version via `config/config.json` using either
+    # `{ "micromamba": { "version": "2.6.0-0" } }` or the top-level
+    # key `"micromamba_version": "2.6.0-0"`. If not present, fall back to
+    # the project default `MICROMAMBA_DEFAULT_VERSION`.
+    version_to_use = None
     try:
-        urllib.request.urlretrieve(MICROMAMBA_WIN_URL, str(tmp_file))
-        with tarfile.open(tmp_file, "r:bz2") as tar:
-            tar.extractall(path=BIN_DIR)
-        tmp_file.unlink(missing_ok=True)
+        if MAIN_CONFIG_PATH.exists():
+            cfg = json.loads(MAIN_CONFIG_PATH.read_text(encoding="utf-8"))
+            version_to_use = (
+                cfg.get("micromamba", {}).get("version")
+                or cfg.get("micromamba_version")
+            )
+    except Exception:
+        version_to_use = None
 
-        extracted = BIN_DIR / "Library" / "bin" / "micromamba.exe"
-        if extracted.exists():
-            import shutil as _shutil
-            _shutil.copy2(extracted, MICROMAMBA_EXE)
+    if not version_to_use:
+        version_to_use = MICROMAMBA_DEFAULT_VERSION
 
-        print_success(f"Micromamba installed to {MICROMAMBA_EXE}")
-    except Exception as exc:
-        print_error(f"Failed to install Micromamba: {exc}")
+    # Try multiple tag formats: first the plain version (e.g. "2.6.0-0"),
+    # then the `v`-prefixed tag (e.g. "v2.6.0-0"), and finally `latest`.
+    candidates = [version_to_use, f"v{version_to_use}", "latest"]
+
+    last_exc = None
+    for tag in candidates:
+        try:
+            if tag == "latest":
+                url = MICROMAMBA_WIN_URL
+            else:
+                url = MICROMAMBA_WIN_URL_TEMPLATE.format(tag=tag)
+            print_info(f"Downloading micromamba from: {url}")
+            urllib.request.urlretrieve(url, str(tmp_file))
+            with tarfile.open(tmp_file, "r:bz2") as tar:
+                tar.extractall(path=BIN_DIR)
+            tmp_file.unlink(missing_ok=True)
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            print_warning(f"Failed to download micromamba from {tag}: {exc}")
+
+    if last_exc is not None:
+        print_error(f"Failed to install Micromamba: {last_exc}")
+        return False
+    # Locate the extracted micromamba binary somewhere under BIN_DIR and
+    # copy it to the expected MICROMAMBA_EXE path.
+    micromamba_name = "micromamba.exe" if platform.system() == "Windows" else "micromamba"
+    found = None
+    for p in BIN_DIR.rglob(micromamba_name):
+        if p.is_file():
+            found = p
+            break
+
+    if not found:
+        print_error("Micromamba binary not found after extraction.")
         return False
 
-    os.environ["PATH"] = str(MICROMAMBA_EXE.parent) + os.pathsep + os.environ["PATH"]
+    try:
+        # Ensure bin dir exists and copy
+        BIN_DIR.mkdir(parents=True, exist_ok=True)
+        import shutil as _shutil
+        _shutil.copy2(found, MICROMAMBA_EXE)
+        # Make executable on non-Windows
+        if platform.system() != "Windows":
+            MICROMAMBA_EXE.chmod(MICROMAMBA_EXE.stat().st_mode | 0o111)
+        print_success(f"Micromamba installed to {MICROMAMBA_EXE}")
+    except Exception as exc:
+        print_error(f"Failed to place Micromamba binary: {exc}")
+        return False
+
+    os.environ["PATH"] = str(MICROMAMBA_EXE.parent) + os.pathsep + os.environ.get("PATH", "")
     return True
 
 
@@ -380,7 +435,7 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
                                 result = _run_micromamba("create", "-p", str(env_path), "-f", str(yaml_path), "-y")
                             else:
                                 result = _run_micromamba("env", "update", "-p", str(env_path), "-f", str(yaml_path), "-y")
-                            
+
                             if result.returncode == 0:
                                 print_success(f"'{env_name}' {action} successfully after cache clear.")
                                 if env_name == "msk_base":
@@ -390,7 +445,7 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
                             else:
                                 print_error(f"Error ({action}) '{env_name}' after cache clear (code {result.returncode}):")
                                 if result.stderr:
-                                    print_subprocess_error(result.stderr)
+                                    print_subprocess_error(result)
                                 all_ok = False
                         else:
                             all_ok = False
@@ -399,12 +454,12 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
                 else:
                     print_error(f"Error ({action}) '{env_name}' persists after cache clear (code {result.returncode}):")
                     if result.stderr:
-                        print_subprocess_error(result.stderr)
+                        print_subprocess_error(result)
                     all_ok = False
             else:
                 print_error(f"Error ({action}) '{env_name}' (code {result.returncode}):")
                 if result.stderr:
-                    print_subprocess_error(result.stderr)
+                    print_subprocess_error(result)
                 all_ok = False
 
     config["env_file_hashes"] = current_hashes
