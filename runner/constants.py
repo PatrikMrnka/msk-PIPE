@@ -49,6 +49,17 @@ MUSCLE_WRAPPING_DEFAULT = SRC_DIR / "MW2" / "Build"
 PYTHON_REL = "python.exe" if platform.system() == "Windows" else "bin/python"
 
 # ── Micromamba download URL (Windows only for now) ────────────────────────────
+MICROMAMBA_DEFAULT_VERSION = "2.6.0-0"
+# resolving this issue https://github.com/mamba-org/mamba/issues/4276
+
+# Template for a release download URL. We will substitute the release tag
+# (e.g. "v2.6.0-0" or "2.6.0-0") into `{tag}`. Keep a fallback to the
+# `latest` download URL for backwards compatibility.
+MICROMAMBA_WIN_URL_TEMPLATE = (
+    "https://github.com/mamba-org/micromamba-releases"
+    "/releases/download/{tag}/micromamba-win-64.tar.bz2"
+)
+
 MICROMAMBA_WIN_URL = (
     "https://github.com/mamba-org/micromamba-releases"
     "/releases/latest/download/micromamba-win-64.tar.bz2"

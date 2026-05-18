@@ -137,5 +137,8 @@
     "snakemake_env": {
         "totalseg": "env_totalseg_gpu.yaml",
         "musclemap": "env_musclemap_gpu.yaml"
+    },
+    "micromamba": {
+        "version": "2.6.0-0"
     }
 }

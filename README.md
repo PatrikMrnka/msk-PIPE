@@ -102,6 +102,19 @@ python -m runner --input data/input/ct/ct.nii.gz
 
 On the very first run the runner will:
 - Download and configure **Micromamba** (if not already present).
+
+- Micromamba version: by default the runner downloads Micromamba `2.6.0-0`.
+  You can override the version via `config/config.json` using either:
+
+  ```json
+  { "micromamba": { "version": "2.6.0-0" } }
+  ```
+
+  or the legacy top-level key:
+
+  ```json
+  { "micromamba_version": "2.6.0-0" }
+  ```
 - Create and populate all required Conda environments (`msk_base`, `msk_totalseg_gpu`, …).
 - Compile the C++ binaries (`mask_to_mesh`, `extract_attachments`).
 - Prompt for any missing configuration (input path, device, …).
