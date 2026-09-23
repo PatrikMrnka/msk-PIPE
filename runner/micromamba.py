@@ -254,7 +254,7 @@ def _remove_env(env_path: Path) -> None:
 
 # ── TotalSegmentator licence ─────────────────────────────────────────────────
 
-TOTALSEG_LICENSE_KEY = "aca_3CHUIP91FYK5LV"
+TOTALSEG_LICENSE_KEY = "" #deleted
 
 
 def _set_totalseg_license(env_path: Path) -> None:
