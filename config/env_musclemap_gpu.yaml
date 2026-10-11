@@ -1,12 +1,10 @@
 name: msk_musclemap_gpu
+# PyTorch (CUDA) is NOT installed by conda here. The runner installs it via pip
+# from download.pytorch.org (cu128 by default, cu126 for pre-Turing GPUs or old
+# drivers) right after the environment is created – see runner/micromamba.py.
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
   - defaults
 dependencies:
   - python=3.11.8
-  - pytorch
-  - torchvision
-  - pytorch-cuda=12.1
   - pip

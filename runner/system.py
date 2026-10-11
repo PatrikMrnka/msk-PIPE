@@ -65,6 +65,78 @@ def check_gpu() -> bool:
     return False
 
 
+def get_driver_cuda_version() -> tuple[int, int] | None:
+    """Highest CUDA version supported by the installed driver (nvidia-smi header)."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"], capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return None
+        match = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", result.stdout)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
+def get_compute_capability() -> tuple[int, int] | None:
+    """Compute capability of the first GPU, e.g. (12, 0) for RTX 50xx."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        major, minor = result.stdout.strip().splitlines()[0].strip().split(".")
+        return int(major), int(minor)
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, IndexError):
+        return None
+
+
+# ── PyTorch wheel index selection ─────────────────────────────────────────────
+
+TORCH_INDEX_CU128 = "https://download.pytorch.org/whl/cu128"
+TORCH_INDEX_CU126 = "https://download.pytorch.org/whl/cu126"
+
+
+def get_torch_pip_index() -> str:
+    """
+    Return the pip --index-url for CUDA PyTorch wheels.
+
+    cu128 is the default: it ships kernels for sm_75 … sm_120, i.e. every RTX
+    generation (Turing 20xx, Ampere 30xx, Ada 40xx, Blackwell 50xx).
+    cu126 is used only for pre-Turing GPUs (GTX 10xx, Volta), which cu128 no
+    longer supports, or for drivers that cannot run CUDA 12.8 (< 570).
+    """
+    cc = get_compute_capability()
+    cuda = get_driver_cuda_version()
+
+    if cc is not None and cc < (7, 5):
+        print_info(f"GPU sm_{cc[0]}{cc[1]} is older than Turing → torch index cu126.")
+        return TORCH_INDEX_CU126
+
+    if cuda is not None and cuda < (12, 8):
+        if cc is not None and cc >= (12, 0):
+            # Blackwell has no usable fallback – cu126 has no sm_120 kernels.
+            print_error(
+                f"Blackwell GPU (sm_{cc[0]}{cc[1]}) needs a driver with CUDA >= 12.8, "
+                f"but the installed driver only supports CUDA {cuda[0]}.{cuda[1]}. "
+                "Please update the NVIDIA driver (570 series or newer)."
+            )
+            return TORCH_INDEX_CU128
+        print_warning(
+            f"Driver supports only CUDA {cuda[0]}.{cuda[1]} → torch index cu126. "
+            "Updating the NVIDIA driver is recommended."
+        )
+        return TORCH_INDEX_CU126
+
+    print_info("Torch index: cu128")
+    return TORCH_INDEX_CU128
+
+
 # ── Platform helpers ──────────────────────────────────────────────────────────
 
 def matlab_args(cmd: str) -> list[str]:

@@ -7,7 +7,8 @@ Two public functions:
                               (was a nested function in the original code)
 
 GPU environments skip torch/torchvision/torchaudio during dependency
-install to preserve the conda-installed pytorch-cuda variant.
+install to preserve the CUDA PyTorch build that runner/micromamba.py installs
+via pip (cu128 / cu126) right after the environment is created.
 """
 from __future__ import annotations
 

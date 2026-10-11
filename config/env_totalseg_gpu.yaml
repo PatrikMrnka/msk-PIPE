@@ -1,14 +1,13 @@
 name: msk_totalseg_gpu
+# PyTorch (CUDA) is NOT installed by conda here. TotalSegmentator pulls a CPU
+# torch from PyPI; the runner then replaces it with the CUDA build via pip
+# (cu128 by default, cu126 for pre-Turing GPUs or old drivers) – see
+# runner/micromamba.py.
 channels:
-  - pytorch
-  - nvidia
   - conda-forge
   - defaults
 dependencies:
   - python=3.12
-  - pytorch
-  - torchvision
-  - pytorch-cuda=12.1
   - nibabel
   - numpy
   - pip

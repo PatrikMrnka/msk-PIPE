@@ -7,11 +7,12 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import urllib.request
 from pathlib import Path
 
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 
 from .constants import (
     BIN_DIR, ENVS_DIR,
@@ -21,8 +22,13 @@ from .constants import (
 )
 from .constants import MAIN_CONFIG_PATH
 import json
-from .system import compute_file_hash
+from .system import compute_file_hash, get_torch_pip_index
 from .ui import print_check, print_error, print_info, print_step, print_subprocess_error, print_success, print_warning
+
+
+# Environments whose PyTorch must be the CUDA build (installed via pip, not conda).
+GPU_TORCH_ENVS = {"msk_totalseg_gpu", MUSCLEMAP_ENV_GPU}
+TORCH_PIP_PACKAGES = ["torch", "torchvision"]
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -86,6 +92,11 @@ def _run_micromamba(*args: str, env_overrides: dict[str, str] | None = None) -> 
         capture_output=True, text=True,
         env=make_mamba_env(env_overrides),
     )
+
+
+def _run_in_env(env_path: Path, *cmd: str) -> subprocess.CompletedProcess:
+    """Run *cmd* inside the environment at *env_path*."""
+    return _run_micromamba("run", "-p", str(env_path), *cmd)
 
 
 def _get_mamba_cache_dir() -> Path:
@@ -253,21 +264,72 @@ def _remove_env(env_path: Path) -> None:
 
 
 # ── TotalSegmentator licence ─────────────────────────────────────────────────
+#
+# The licence key is never stored in the repository. It is taken from the
+# TOTALSEG_LICENSE environment variable or asked for interactively when a
+# msk_totalseg_* environment is created/updated. TotalSegmentator stores the
+# key globally (~/.totalsegmentator/config.json or $TOTALSEG_HOME_DIR), so the
+# question is asked only until a key has been set once.
 
-TOTALSEG_LICENSE_KEY = "" #deleted
+_totalseg_license_skipped = False  # ask at most once per runner invocation
+
+
+def _totalseg_license_present() -> bool:
+    """True if TotalSegmentator already has a licence number configured."""
+    home = Path(os.environ.get("TOTALSEG_HOME_DIR", Path.home() / ".totalsegmentator"))
+    try:
+        data = json.loads((home / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(data.get("license_number"))
+
+
+def _ask_totalseg_license() -> str | None:
+    """Return the licence key from $TOTALSEG_LICENSE or a prompt; None = skip."""
+    key = os.environ.get("TOTALSEG_LICENSE", "").strip()
+    if key:
+        return key
+    if not sys.stdin.isatty():
+        return None
+    print_info(
+        "TotalSegmentator task 'appendicular_bones' (tibia, fibula, …) requires a licence "
+        "(free for non-commercial use – see the TotalSegmentator README on GitHub)."
+    )
+    key = Prompt.ask(
+        "Enter TotalSegmentator licence key (press Enter to skip)",
+        default="", show_default=False,
+    ).strip()
+    return key or None
 
 
 def _set_totalseg_license(env_path: Path) -> None:
-    """Run ``totalseg_set_license`` inside *env_path* to activate the licence.
+    """Activate the TotalSegmentator licence inside *env_path*.
 
-    Called automatically after every successful create/update of an
-    ``msk_totalseg_*`` environment so the pipeline can run without a manual
-    activation step.
+    Called after every successful create/update of an ``msk_totalseg_*``
+    environment. Never raises and never fails the environment setup – a
+    missing licence only disables the ``appendicular_bones`` task.
     """
+    global _totalseg_license_skipped
+
+    if _totalseg_license_present():
+        print_info("TotalSegmentator licence is already configured.")
+        return
+    if _totalseg_license_skipped:
+        return
+
+    key = _ask_totalseg_license()
+    if key is None:
+        _totalseg_license_skipped = True
+        print_warning(
+            "TotalSegmentator licence not set – 'appendicular_bones' (tibia/fibula) will not work. "
+            f"Set it later with: micromamba run -p {env_path} totalseg_set_license -l <key>"
+        )
+        return
+
     print_step(f"Activating TotalSegmentator licence in {env_path.name}...")
     result = subprocess.run(
         [str(MICROMAMBA_EXE), "run", "-p", str(env_path),
-         "totalseg_set_license", "-l", TOTALSEG_LICENSE_KEY],
+         "totalseg_set_license", "-l", key],
         capture_output=True,
         text=True,
         env=make_mamba_env(),
@@ -276,9 +338,114 @@ def _set_totalseg_license(env_path: Path) -> None:
         print_success(f"TotalSegmentator licence activated in {env_path.name}.")
     else:
         print_warning(
-            f"Could not activate TotalSegmentator licence in {env_path.name}: "
+            f"Could not activate TotalSegmentator licence in {env_path.name} (setup continues): "
             + (result.stderr or result.stdout).strip()
         )
+
+
+# ── CUDA PyTorch (pip) ───────────────────────────────────────────────────────
+#
+# Conda's `pytorch` channel stopped at torch 2.5.1 (no Blackwell / sm_120
+# kernels), so GPU environments get PyTorch from download.pytorch.org via pip.
+# A smoke test runs a real CUDA kernel on every pre-flight, so an environment
+# built on an older GPU is repaired automatically after a GPU swap.
+
+_CUDA_SMOKE_TEST = (
+    "import torch\n"
+    "assert torch.cuda.is_available(), 'torch.cuda.is_available() is False'\n"
+    "torch.arange(8, device='cuda').float().sum().item()\n"
+    "print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))\n"
+)
+
+
+def _torch_cuda_works(env_path: Path) -> tuple[bool, str]:
+    """Run a tiny CUDA kernel inside the env. Returns (ok, output).
+
+    Calls the env's python.exe directly: on Windows `micromamba run` goes
+    through cmd.exe, which splits a multi-line `-c` script into separate
+    shell commands.
+    """
+    python_exe = _python_exe(env_path)
+    if not python_exe.exists():
+        return False, f"Python executable not found: {python_exe}"
+    try:
+        result = subprocess.run(
+            [str(python_exe), "-c", _CUDA_SMOKE_TEST],
+            capture_output=True, text=True, timeout=300,
+            env=make_mamba_env(),
+        )
+    except subprocess.TimeoutExpired:
+        return False, "CUDA smoke test timed out."
+    output = (result.stdout if result.returncode == 0 else (result.stderr or result.stdout)).strip()
+    return result.returncode == 0, output
+
+
+def _install_gpu_torch(env_path: Path) -> bool:
+    """Install the CUDA build of torch/torchvision into *env_path* via pip."""
+    index_url = get_torch_pip_index()
+    print_step(f"Installing CUDA PyTorch into '{env_path.name}' ({index_url})...")
+
+    # 1) Replace only torch/torchvision with the CUDA build. --no-deps keeps the
+    #    pinned dependencies of MuscleMap/scikit-learn (numpy, Pillow) intact.
+    result = _run_in_env(
+        env_path, "python", "-m", "pip", "install",
+        "--force-reinstall", "--no-deps",
+        *TORCH_PIP_PACKAGES, "--index-url", index_url,
+    )
+    if result.returncode != 0:
+        print_error(f"pip install of CUDA PyTorch failed in '{env_path.name}'.")
+        print_subprocess_error(result)
+        return False
+
+    # 2) Add any dependencies the new torch needs (only-if-needed strategy).
+    result = _run_in_env(
+        env_path, "python", "-m", "pip", "install",
+        *TORCH_PIP_PACKAGES, "--index-url", index_url,
+    )
+    if result.returncode != 0:
+        print_error(f"Installing PyTorch dependencies failed in '{env_path.name}'.")
+        print_subprocess_error(result)
+        return False
+
+    check = _run_in_env(env_path, "python", "-m", "pip", "check")
+    if check.returncode != 0:
+        print_warning(f"pip check reports conflicts in '{env_path.name}':\n{check.stdout.strip()}")
+
+    return True
+
+
+def _ensure_gpu_torch(env_path: Path) -> bool:
+    """Make sure the env's PyTorch can actually run kernels on this GPU."""
+    ok, output = _torch_cuda_works(env_path)
+    if ok:
+        print_success(f"CUDA PyTorch OK in '{env_path.name}': {output}")
+        return True
+
+    print_warning(f"PyTorch in '{env_path.name}' cannot run on this GPU – reinstalling CUDA build.")
+    if not _install_gpu_torch(env_path):
+        return False
+
+    ok, output = _torch_cuda_works(env_path)
+    if ok:
+        print_success(f"CUDA PyTorch OK in '{env_path.name}': {output}")
+        return True
+
+    print_error(
+        f"CUDA PyTorch still does not work in '{env_path.name}'. "
+        "Check that the NVIDIA driver is up to date (570+ for RTX 50xx).\n" + output
+    )
+    return False
+
+
+def _after_env_ready(env_name: str, env_path: Path, has_gpu: bool, freshly_built: bool) -> bool:
+    """Post-processing shared by the create / update / up-to-date code paths."""
+    if env_name == "msk_base":
+        patch_snakemake_benchmark(env_path)
+    if freshly_built and env_name.startswith("msk_totalseg_"):
+        _set_totalseg_license(env_path)
+    if has_gpu and env_name in GPU_TORCH_ENVS:
+        return _ensure_gpu_torch(env_path)
+    return True
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -409,16 +576,14 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
             action = "updated"
         else:
             print_success(f"'{env_name}' is up-to-date.")
-            if env_name == "msk_base":
-                patch_snakemake_benchmark(env_path)
+            if not _after_env_ready(env_name, env_path, has_gpu, freshly_built=False):
+                all_ok = False
             continue
 
         if result.returncode == 0:
             print_success(f"'{env_name}' {action} successfully.")
-            if env_name == "msk_base":
-                patch_snakemake_benchmark(env_path)
-            if env_name.startswith("msk_totalseg_"):
-                _set_totalseg_license(env_path)
+            if not _after_env_ready(env_name, env_path, has_gpu, freshly_built=True):
+                all_ok = False
         else:
             # Check if this is a cache error
             error_output = result.stderr or result.stdout
@@ -438,10 +603,8 @@ def update_conda_envs(config: dict, has_gpu: bool = False) -> tuple[bool, dict]:
 
                             if result.returncode == 0:
                                 print_success(f"'{env_name}' {action} successfully after cache clear.")
-                                if env_name == "msk_base":
-                                    patch_snakemake_benchmark(env_path)
-                                if env_name.startswith("msk_totalseg_"):
-                                    _set_totalseg_license(env_path)
+                                if not _after_env_ready(env_name, env_path, has_gpu, freshly_built=True):
+                                    all_ok = False
                             else:
                                 print_error(f"Error ({action}) '{env_name}' after cache clear (code {result.returncode}):")
                                 if result.stderr:
