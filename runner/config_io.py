@@ -47,7 +47,8 @@ def load_config(path: Path) -> dict:
             "staple_path": "src\\STAPLE",
             "vtk_path": "src\\MW2\\ExternalLibs\\VTK\\Bin\\lib\\cmake\\vtk-9.4",
             "input_path": "data/input/ct/ct.nii.gz",
-            "cpp_tools_path": str(C.CPP_TOOLS_DEFAULT_DIR.resolve())
+            "cpp_tools_path": str(C.CPP_TOOLS_DEFAULT_DIR.resolve()),
+            "fast_rnrr_path": "src/FAST_RNRR/Fast_RNRR.exe"
         },
         "totalsegmentator": {
             "fast": False,

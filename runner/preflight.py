@@ -31,6 +31,7 @@ from .ui import console, print_fatal, print_header, print_section, print_info
 # Domain checks (each lives in its own module)
 from .external_tools import (
     check_muscle_wrapping,
+    ensure_fast_rnrr,
     find_staple,
     compile_cpp_tools,
 )
@@ -182,6 +183,11 @@ def main(input_path: str | None = None) -> None:
     # 8. C++ tools (mask_to_mesh + extract_attachments) – unified build
     if not compile_cpp_tools(paths):
         _abort("C++ tools are not available. Pipeline will not start.")
+
+    # 8b. Fast-RNRR binaries (only when attachment_extraction.method == "fast_rnrr")
+    method = config.get("attachment_extraction", {}).get("method")
+    if not ensure_fast_rnrr(paths, method):
+        _abort("Fast-RNRR binaries are not available.")
 
     # 9. Input format
     if not user_settings.get("input_format"):

@@ -14,6 +14,7 @@ data
 STAPLE
 MW2
 MuscleMap
+FAST_RNRR
 
 *.zip
 *.nii.gz

@@ -428,10 +428,16 @@ joint coordinate systems, assigns mass properties, and generates
 `bone_model.osim`.
 
 ### Step 8: Attachment Extraction
-Three methods available (configured via `config.json` in "attachment_extraction/method"):
+Four methods available (configured via `config.json` in "attachment_extraction/method"):
 - **`proximity_based`** — C++ binary uses `vtkStaticCellLocator` to find muscle vertices within a configurable distance threshold of each bone surface; outputs ordered contour points as VTK point clouds.
 - **`atlas_based`** — maps reference LHDL attachment areas onto patient-specific bone geometry using Coherent Point Drift (CPD) registration.
+- **`fast_rnrr`** — same LHDL atlas and the same rigid pre-alignment as `atlas_based`, but the non-rigid step is [Fast-RNRR](https://github.com/Juyong/Fast_RNRR) (Yao et al., CVPR 2020) instead of CPD. The deformed template is mesh-to-mesh, attachments follow the per-vertex displacement field (IDW, k=4) and are snapped to the nearest patient vertex. Based on [dannystefy/muscle-attachment-registration](https://github.com/dannystefy/muscle-attachment-registration). `Fast_RNRR.exe` + `OpenMeshCore.dll` are downloaded automatically by the pre-flight (pinned commit, SHA-256 verified) into `paths.fast_rnrr_path` (default `src/FAST_RNRR/`) when this method is selected. Intermediate meshes/logs: `<run>/attachments/_rnrr/<bone>/`. **Fast-RNRR is patented — research use only.**
 - **`own_attachments`** — copies user-supplied `.vtk` attachment files directly from `data/input/landmarks` folder.
+
+### Step 8.2: Comparing attachment methods (CPD vs Fast-RNRR)
+1. Finish a normal run with `"method": "atlas_based"` (e.g. `run_1`).
+2. `.\tools\run_rnrr_on_existing_run.ps1 -BaseRun run_1 -NewRun run_2 -Method fast_rnrr` — copies `run_1` without attachment-dependent outputs and re-runs only Step 8 → 11 (segmentation/STAPLE reused).
+3. `envs\msk_base\python.exe src\python\compare_attachment_methods.py --run CPD=data\output\run_1 --run RNRR=data\output\run_2 --output data\output\compare_cpd_vs_rnrr` — per-muscle fibre-length RMSE / Pearson r vs LHDL side by side, Wilcoxon test, distance between the two methods' attachments, bar chart.
 
 ### Step 8.1: User provided attachments
 If the `own_attachments` method is selected, the names of attachment files needs to follow names from `config/muscle_topology.json` file (such as **GluteusMaximus**) and have the **_Ori** (Origin) and **_Ins** (Insertion) sufixes.

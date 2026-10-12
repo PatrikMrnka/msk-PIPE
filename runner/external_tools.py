@@ -5,6 +5,7 @@ Contains three independent checks, each focused on a single third-party tool:
   - check_muscle_wrapping   → verifies Muscle Wrapping 2.0 DLL
   - find_staple             → locates the MSK-STAPLE MATLAB toolbox
   - compile_cpp_tools       → ensures mask_to_mesh & extract_attachments are compiled
+  - ensure_fast_rnrr        → downloads Fast_RNRR.exe + OpenMeshCore.dll (method fast_rnrr)
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ import shutil
 import subprocess
 from pathlib import Path
 import tempfile
+import hashlib
+import urllib.request
 
 from rich.prompt import Confirm, Prompt
 
@@ -408,3 +411,78 @@ def _clone_staple(dest: Path) -> bool:
         except Exception as e:
             print_error(f"Failed to move STAPLE folder: {e}")
             return False
+
+
+# ── Fast-RNRR ─────────────────────────────────────────────────────────────────
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _fast_rnrr_ok(exe_dir: Path) -> bool:
+    for name, sha in C.FAST_RNRR_FILES.items():
+        f = exe_dir / name
+        if not f.exists() or _sha256(f) != sha:
+            return False
+    return True
+
+
+def ensure_fast_rnrr(paths: dict, method: str | None) -> bool:
+    """
+    Make sure Fast_RNRR.exe + OpenMeshCore.dll are present when the attachment
+    method is ``fast_rnrr``. Downloads the prebuilt Windows binaries (pinned
+    commit, SHA-256 verified) into the folder of ``paths.fast_rnrr_path``.
+    Does nothing for other methods.
+    """
+    if method != "fast_rnrr":
+        return True
+
+    print_check("Checking Fast-RNRR binaries")
+    exe = Path(paths.get("fast_rnrr_path") or C.FAST_RNRR_DEFAULT_EXE)
+    paths["fast_rnrr_path"] = str(exe).replace("\\", "/")
+    exe_dir = exe.parent
+
+    if platform.system() != "Windows":
+        if exe.exists():
+            print_success(f"Fast-RNRR found at {exe}.")
+            return True
+        print_error(
+            "Prebuilt Fast-RNRR is Windows-only. Build it from "
+            "https://github.com/Juyong/Fast_RNRR and set paths.fast_rnrr_path."
+        )
+        return False
+
+    if _fast_rnrr_ok(exe_dir):
+        print_success(f"Fast-RNRR found at {exe}.")
+        return True
+
+    print_warning("Fast-RNRR binaries not found (or checksum mismatch).")
+    print_info("Fast-RNRR is patent-protected and may only be used for research purposes.")
+    if not Confirm.ask("Download Fast_RNRR.exe + OpenMeshCore.dll from GitHub?", default=True):
+        return False
+
+    exe_dir.mkdir(parents=True, exist_ok=True)
+    for name, sha in C.FAST_RNRR_FILES.items():
+        url = C.FAST_RNRR_BASE_URL + name
+        dest = exe_dir / name
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        print_info(f"Downloading {url}")
+        try:
+            with urllib.request.urlopen(url, timeout=120) as r, open(tmp, "wb") as f:
+                shutil.copyfileobj(r, f)
+        except Exception as exc:
+            print_error(f"Download of {name} failed: {exc}")
+            tmp.unlink(missing_ok=True)
+            return False
+        if _sha256(tmp) != sha:
+            print_error(f"Checksum mismatch for {name} - file discarded.")
+            tmp.unlink(missing_ok=True)
+            return False
+        os.replace(tmp, dest)
+
+    print_success(f"Fast-RNRR downloaded to {exe_dir}.")
+    return True

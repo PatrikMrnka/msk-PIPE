@@ -42,6 +42,20 @@ STAPLE_REPO_URL = "https://github.com/modenaxe/msk-STAPLE.git"
 STAPLE_DEFAULT_DIR = SRC_DIR / "STAPLE"
 
 
+# Fast-RNRR (attachment_extraction.method = "fast_rnrr"), prebuilt Windows binaries
+# from https://github.com/dannystefy/muscle-attachment-registration pinned to a commit.
+# Fast-RNRR (Yao et al., CVPR 2020) is patented - research use only.
+FAST_RNRR_DEFAULT_EXE = SRC_DIR / "FAST_RNRR" / "Fast_RNRR.exe"
+FAST_RNRR_COMMIT = "2604a17d00af1033e1015960ca52f204ab4de4af"
+FAST_RNRR_BASE_URL = (
+    "https://raw.githubusercontent.com/dannystefy/muscle-attachment-registration"
+    f"/{FAST_RNRR_COMMIT}/win/"
+)
+FAST_RNRR_FILES = {
+    "Fast_RNRR.exe": "3eff52e596cac351f5370b2e9f083661dcbbbe0de33033beff83b70ed4c76082",
+    "OpenMeshCore.dll": "d9f710de4be3cf692aa6f9af70384c623ba923061d74922d1bd5e54ae05b6723",
+}
+
 CPP_TOOLS_DEFAULT_DIR = SRC_DIR / "cpp"
 MUSCLE_WRAPPING_DEFAULT = SRC_DIR / "MW2" / "Build"
 

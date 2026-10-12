@@ -26,6 +26,7 @@ BASE_RULES = [
     "clean_bone_mask", "clean_muscle_mask", "clean_muscle_mesh", "clean_geometry_mesh",
     "bone_mask_to_stl", "muscle_mask_to_obj",
     "convert_to_vtk_bones", "convert_to_vtk_muscles", "extract_attachments_lhdl",
+    "extract_attachments_atlas", "extract_attachments_rnrr",
     "extract_attachments", "merge_bone_meshes", "split_meshes", "total_segmentator",
     "muscle_map", "extract_muscle_masks", "run_muscle_wrapping", "msk_staple",
     "prepare_muscle_wrapping", "statistics_compare", "subtract_bone_from_raw_muscle_segmentation",

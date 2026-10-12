@@ -10,7 +10,8 @@
         "skip_preflight_checks": false,
         "snakemake_cores": "all",
         "snakemake_latency_wait": 30,
-        "muscle_segmentator": "musclemap"
+        "muscle_segmentator": "musclemap",
+        "has_gpu": true
     },
     "raw_input": {
         "shape": "381x245x1120"
@@ -18,13 +19,14 @@
     "paths": {
         "input_dir": "data/input",
         "output_dir": "data/output",
-        "extract_attachments_path": "src/cpp/build/bin/Release/extract_attachments.exe",
-        "mask_to_mesh_path": "src/cpp/build/bin/Release/mask_to_mesh.exe",
-        "muscle_wrapping_path": "src/MW2/Build",
-        "staple_path": "src/STAPLE",
+        "extract_attachments_path": "C:\\msk-PIPE\\src\\cpp\\build\\bin\\Release\\extract_attachments.exe",
+        "mask_to_mesh_path": "C:\\msk-PIPE\\src\\cpp\\build\\bin\\Release\\mask_to_mesh.exe",
+        "muscle_wrapping_path": "C:\\msk-PIPE\\src\\MW2\\Build",
+        "staple_path": "src\\STAPLE",
         "vtk_path": "src/MW2/Build/ExternalLibs/VTK/Bin/lib/cmake/vtk-9.4",
-        "input_path": "data/input/ct/ct.nii.gz",
-        "cpp_tools_path": "src/cpp"
+        "input_path": "C:\\msk-PIPE\\data\\input\\ct\\ct.nii.gz",
+        "cpp_tools_path": "C:\\msk-PIPE\\src\\cpp",
+        "fast_rnrr_path": "src/FAST_RNRR/Fast_RNRR.exe"
     },
     "totalsegmentator": {
         "fast": false,
@@ -131,8 +133,8 @@
     "env_file_hashes": {
         "msk_base": "b466117da240465fbb2f2878a9e58afdcc12959a5c2eb85e5c660a60f792ed1e",
         "msk_totalseg_cpu": "e82f26a7c32cf2d264f42365cf70aa5e49d90683a740b072bd62255e695f7365",
-        "msk_totalseg_gpu": "498584f10b27997ddc9acc2305bab92d19f6931d4c93b77ceb9a9a5067a35526",
-        "msk_musclemap_cpu": "f2437ee844b3702b5b62ba8a37ae7d25c387cb337c4e056d2aa66e367f8fe143"
+        "msk_totalseg_gpu": "e73325c8ad8947b582143ea678a0ab737fd5395ec3dad2801c24ebf0f880864e",
+        "msk_musclemap_gpu": "48e17e4847db49db44056a0aac18f1108867d9860006f1fc4c19f7e22e0973e5"
     },
     "snakemake_env": {
         "totalseg": "env_totalseg_gpu.yaml",

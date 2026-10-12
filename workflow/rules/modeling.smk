@@ -46,6 +46,7 @@ MUSCLES = list(MUSCLE_LABELS)
 METHOD = config.get("attachment_extraction", {}).get("method", "atlas_based")
 LHDL_BONES = config.get("attachment_extraction", {}).get("lhdl_bones_dir", "")
 LHDL_MUSCLES = config.get("attachment_extraction", {}).get("lhdl_muscles_dir", "")
+FAST_RNRR_EXE = config.get("paths", {}).get("fast_rnrr_path", "src/FAST_RNRR/Fast_RNRR.exe")
 
 
 BONE_MUSCLE_MAP = {}
@@ -62,7 +63,7 @@ for muscle_name, roles in TOPOLOGY.items():
         
         if METHOD == "proximity_based":
             in_data = os.path.join(OUT_DIR, "muscle_models", f"{roles['label']}.obj")
-        elif METHOD == "atlas_based":
+        elif METHOD in ("atlas_based", "fast_rnrr"):
             muscle_label = roles["label"]
             in_data = os.path.join(LHDL_MUSCLES, muscle_label, f"{muscle_name}_{suffix}.vtk")
         elif METHOD == "own_attachments":
@@ -140,6 +141,41 @@ elif METHOD == "atlas_based":
                     --target-bone "{params.target_bone}" \
                     --lhdl-attachments {input.lhdl_att} \
                     --outputs {output.vtks}
+                """
+
+elif METHOD == "fast_rnrr":
+    # Same LHDL atlas + same rigid pre-alignment as "atlas_based" (CPD),
+    # only the non-rigid step is Fast-RNRR (Yao et al., CVPR 2020).
+    for bone, mappings in BONE_MUSCLE_MAP.items():
+        rule:
+            name:
+                f"extract_attachments_rnrr_{bone}"
+            input:
+                geom_dir=os.path.join(OUT_DIR, "Geometry"),
+                pelvis=os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl") if bone == "pelvis_with_sacrum" else [],
+                lhdl_att=mappings["inputs"]
+            output:
+                vtks=mappings["outputs"],
+                done=touch(os.path.join(OUT_DIR, "attachments", f".done_{bone}"))
+            params:
+                py_exe=get_py_exe("msk_base"),
+                rnrr_exe=FAST_RNRR_EXE,
+                work_dir=os.path.join(OUT_DIR, "attachments", "_rnrr", bone),
+                lhdl_bone=os.path.join(LHDL_BONES, f"{bone}.obj"),
+                target_bone=lambda w, b=bone: os.path.join(BONE_STAPLE_DIR, f"{b}.stl") if b != "pelvis_with_sacrum" else os.path.join(BONE_STAPLE_DIR, "pelvis_with_sacrum.stl")
+            log:
+                os.path.join(OUT_DIR, "logs", f"extract_attachments_rnrr_{bone}.log")
+            benchmark:
+                os.path.join(OUT_DIR, "benchmarks", f"extract_attachments_rnrr_{bone}.txt") if config.get("user_settings", {}).get("enable_benchmarking", True) else ""
+            shell:
+                """
+                "{params.py_exe}" src/python/extract_attachments_runner/map_lhdl_attachments_rnrr.py \
+                    --lhdl-bone "{params.lhdl_bone}" \
+                    --target-bone "{params.target_bone}" \
+                    --lhdl-attachments {input.lhdl_att} \
+                    --outputs {output.vtks} \
+                    --rnrr-exe "{params.rnrr_exe}" \
+                    --work-dir "{params.work_dir}" > "{log}" 2>&1
                 """
 
 elif METHOD == "own_attachments":
